@@ -19,10 +19,6 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
-        <activity
-            android:name=".AcceptedActivity"
-            android:label="@string/submitted_activity_name">
-        </activity>
     </application>
 
 </manifest>
