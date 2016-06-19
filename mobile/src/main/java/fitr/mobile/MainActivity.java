@@ -67,20 +67,16 @@ import static com.google.android.gms.fitness.data.DataType.*;
 public class MainActivity extends AppCompatActivity {
 
     public static final String TAG = "BasicSensorsApi";
-    // [START auth_variable_references]
+
     private GoogleApiClient mClient = null;
-    // [END auth_variable_references]
 
     private static final int REQUEST_PERMISSIONS_REQUEST_CODE = 34;
 
-    // [START mListener_variable_reference]
     // Need to hold a reference to this listener, as it's passed into the "unregister"
     // method in order to stop all sensors from sending data to this listener.
     private OnDataPointListener mListener;
-    // [END mListener_variable_reference]
 
 
-    // [START auth_oncreate_setup]
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -106,13 +102,9 @@ public class MainActivity extends AppCompatActivity {
         // them, the app will start working.
         buildFitnessClient();
     }
-    // [END auth_oncreate_setup]
-
-    // [START auth_build_googleapiclient_beginning]
 
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
-        // Inflate the menu; this adds items to the action bar if it is present.
         getMenuInflater().inflate(R.menu.main, menu);
         return true;
     }
@@ -177,7 +169,6 @@ public class MainActivity extends AppCompatActivity {
             }
         };
     }
-    // [END auth_build_googleapiclient_beginning]
 
     /**
      * Find available data sources and attempt to register on a specific {@link DataType}.
@@ -188,7 +179,6 @@ public class MainActivity extends AppCompatActivity {
      * where the {@link SensorRequest} contains the desired data type.
      */
     private void findFitnessDataSources() {
-        // [START find_data_sources]
         // Note: Fitness.SensorsApi.findDataSources() requires the ACCESS_FINE_LOCATION permission.
         Fitness.SensorsApi.findDataSources(mClient, new DataSourcesRequest.Builder()
                 // At least one datatype must be specified.
@@ -197,7 +187,6 @@ public class MainActivity extends AppCompatActivity {
                 .setDataSourceTypes(DataSource.TYPE_RAW)
                 .build())
                 .setResultCallback(dataSourceResultCallback());
-        // [END find_data_sources]
     }
 
     @NonNull
@@ -225,7 +214,6 @@ public class MainActivity extends AppCompatActivity {
      * {@link DataType} combo.
      */
     private void registerFitnessDataListener(DataSource dataSource, DataType dataType) {
-        // [START register_data_listener]
         mListener = new OnDataPointListener() {
             @Override
             public void onDataPoint(DataPoint dataPoint) {
@@ -255,7 +243,6 @@ public class MainActivity extends AppCompatActivity {
                         }
                     }
                 });
-        // [END register_data_listener]
     }
 
     /**
@@ -268,7 +255,6 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
 
-        // [START unregister_data_listener]
         // Waiting isn't actually necessary as the unregister call will complete regardless,
         // even if called from within onStop, but a callback can still be added in order to
         // inspect the results.
@@ -285,7 +271,6 @@ public class MainActivity extends AppCompatActivity {
                         }
                     }
                 });
-        // [END unregister_data_listener]
     }
 
 
