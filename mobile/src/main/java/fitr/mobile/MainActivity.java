@@ -1,21 +1,8 @@
-/*
- * Copyright (C) 2014 Google, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
 package fitr.mobile;
 
+import android.app.Activity;
 import android.content.Intent;
+import android.content.IntentSender;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.net.Uri;
@@ -29,19 +16,14 @@ import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
 
+import static android.Manifest.permission.*;
+
+
 import com.google.android.gms.common.ConnectionResult;
-import com.google.android.gms.common.Scopes;
 import com.google.android.gms.common.api.GoogleApiClient;
 import com.google.android.gms.common.api.GoogleApiClient.ConnectionCallbacks;
 import com.google.android.gms.common.api.ResultCallback;
-import com.google.android.gms.common.api.Scope;
 import com.google.android.gms.common.api.Status;
-
-import fitr.common.logger.Log;
-import fitr.common.logger.LogView;
-import fitr.common.logger.LogWrapper;
-import fitr.common.logger.MessageOnlyLogFilter;
-
 import com.google.android.gms.fitness.Fitness;
 import com.google.android.gms.fitness.data.DataPoint;
 import com.google.android.gms.fitness.data.DataSource;
@@ -53,10 +35,16 @@ import com.google.android.gms.fitness.request.OnDataPointListener;
 import com.google.android.gms.fitness.request.SensorRequest;
 import com.google.android.gms.fitness.result.DataSourcesResult;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.TimeUnit;
 
-import static android.Manifest.permission.*;
-import static com.google.android.gms.fitness.data.DataType.*;
+import fitr.common.logger.Log;
+import fitr.common.logger.LogView;
+import fitr.common.logger.LogWrapper;
+import fitr.common.logger.MessageOnlyLogFilter;
+
+import static com.google.android.gms.fitness.data.DataType.TYPE_STEP_COUNT_CUMULATIVE;
 
 
 /**
@@ -68,13 +56,18 @@ public class MainActivity extends AppCompatActivity {
 
     public static final String TAG = "BasicSensorsApi";
 
+    private static final String AUTH_PENDING = "auth_state_pending";
+
+    private static final int REQUEST_OAUTH = 1;
+
     private GoogleApiClient mClient = null;
 
     private static final int REQUEST_PERMISSIONS_REQUEST_CODE = 34;
 
     // Need to hold a reference to this listener, as it's passed into the "unregister"
     // method in order to stop all sensors from sending data to this listener.
-    private OnDataPointListener mListener;
+    private boolean authInProgress = false;
+    private List<OnDataPointListener> mListeners;
 
 
     @Override
@@ -85,13 +78,19 @@ public class MainActivity extends AppCompatActivity {
         setContentView(R.layout.activity_main);
         // This method sets up our custom logger, which will print all log messages to the device
         // screen, as well as to adb logcat.
-        initializeLogging();
 
-        // When permissions are revoked the app is restarted so onCreate is sufficient to check for
-        // permissions core to the Activity's functionality.
+        if (savedInstanceState != null) {
+            authInProgress = savedInstanceState.getBoolean(AUTH_PENDING);
+        }
+
         if (!isPermissionGranted()) {
             requestPermissions();
+        } else {
+            buildFitnessClient();
         }
+
+
+        initializeLogging();
     }
 
     @Override
@@ -100,7 +99,11 @@ public class MainActivity extends AppCompatActivity {
 
         // This ensures that if the user denies the permissions then uses Settings to re-enable
         // them, the app will start working.
-        buildFitnessClient();
+    }
+
+    @Override
+    protected void onStart() {
+        super.onStart();
     }
 
     @Override
@@ -112,11 +115,20 @@ public class MainActivity extends AppCompatActivity {
     @Override
     public boolean onOptionsItemSelected(MenuItem item) {
         int id = item.getItemId();
-        if (id == R.id.action_unregister_listener) {
-            unregisterFitnessDataListener();
-            return true;
-        }
         return super.onOptionsItemSelected(item);
+    }
+
+    @Override
+    protected void onStop() {
+        super.onStop();
+
+        unregisterFitnessDataListener();
+    }
+
+    @Override
+    protected void onSaveInstanceState(Bundle outState) {
+        super.onSaveInstanceState(outState);
+        outState.putBoolean(AUTH_PENDING, authInProgress);
     }
 
     /**
@@ -128,27 +140,41 @@ public class MainActivity extends AppCompatActivity {
      * multiple accounts on the device and needing to specify which account to use, etc.
      */
     private void buildFitnessClient() {
-        if (mClient == null && isPermissionGranted()) {
+
+        Log.i(TAG, "buildFitnessClient");
+        if (mClient == null) {
             mClient = new GoogleApiClient.Builder(this)
                     .addApi(Fitness.SENSORS_API)
-                    .addScope(new Scope(Scopes.FITNESS_LOCATION_READ))
-                    .addConnectionCallbacks(findFitnessDataSourcesCallback())
-                    .enableAutoManage(this, 0, new GoogleApiClient.OnConnectionFailedListener() {
-                        @Override
-                        public void onConnectionFailed(ConnectionResult result) {
-                            Log.i(TAG, "Google Play services connection failed. Cause: " + result.toString());
-                            Snackbar.make(
-                                    MainActivity.this.findViewById(R.id.main_activity_view),
-                                    "Exception while connecting to Google Play services: " + result.getErrorMessage(),
-                                    Snackbar.LENGTH_INDEFINITE).show();
-                        }
-                    })
+                    .addScope(Fitness.SCOPE_ACTIVITY_READ_WRITE)
+                    .addScope(Fitness.SCOPE_LOCATION_READ_WRITE)
+                    .addScope(Fitness.SCOPE_NUTRITION_READ_WRITE)
+                    .addConnectionCallbacks(onConnection())
+                    .enableAutoManage(this, 0, onConnectionFailed())
                     .build();
         }
     }
 
     @NonNull
-    private ConnectionCallbacks findFitnessDataSourcesCallback() {
+    private GoogleApiClient.OnConnectionFailedListener onConnectionFailed() {
+        return new GoogleApiClient.OnConnectionFailedListener() {
+            @Override
+            public void onConnectionFailed(ConnectionResult result) {
+                if (!authInProgress) {
+                    try {
+                        authInProgress = true;
+                        result.startResolutionForResult(MainActivity.this, REQUEST_OAUTH);
+                    } catch (IntentSender.SendIntentException e) {
+
+                    }
+                } else {
+                    Log.e("GoogleFit", "authInProgress");
+                }
+            }
+        };
+    }
+
+    @NonNull
+    private ConnectionCallbacks onConnection() {
         return new ConnectionCallbacks() {
             @Override
             public void onConnected(Bundle bundle) {
@@ -161,9 +187,9 @@ public class MainActivity extends AppCompatActivity {
             public void onConnectionSuspended(int i) {
                 // If your connection to the sensor gets lost at some point,
                 // you'll be able to determine the reason and react to it here.
-                if (i == ConnectionCallbacks.CAUSE_NETWORK_LOST) {
+                if (i == CAUSE_NETWORK_LOST) {
                     Log.i(TAG, "Connection lost.  Cause: Network Lost.");
-                } else if (i == ConnectionCallbacks.CAUSE_SERVICE_DISCONNECTED) {
+                } else if (i == CAUSE_SERVICE_DISCONNECTED) {
                     Log.i(TAG, "Connection lost.  Reason: Service Disconnected");
                 }
             }
@@ -182,9 +208,11 @@ public class MainActivity extends AppCompatActivity {
         // Note: Fitness.SensorsApi.findDataSources() requires the ACCESS_FINE_LOCATION permission.
         Fitness.SensorsApi.findDataSources(mClient, new DataSourcesRequest.Builder()
                 // At least one datatype must be specified.
-                .setDataTypes(TYPE_LOCATION_SAMPLE)
+                .setDataTypes(DataType.TYPE_LOCATION_SAMPLE,
+                        DataType.TYPE_STEP_COUNT_DELTA,
+                        DataType.TYPE_DISTANCE_DELTA)
                 // Can specify whether data type is raw or derived.
-                .setDataSourceTypes(DataSource.TYPE_RAW)
+                .setDataSourceTypes(DataSource.TYPE_RAW, DataSource.TYPE_DERIVED)
                 .build())
                 .setResultCallback(dataSourceResultCallback());
     }
@@ -195,14 +223,21 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onResult(DataSourcesResult dataSourcesResult) {
                 Log.i(TAG, "Result: " + dataSourcesResult.getStatus().toString());
+
+                mListeners = new ArrayList<>();
+
                 for (DataSource dataSource : dataSourcesResult.getDataSources()) {
                     Log.i(TAG, "Data source found: " + dataSource.toString());
-                    Log.i(TAG, "Data Source type: " + dataSource.getDataType().getName());
+                    Log.i(TAG, "*** Data Source type: " + dataSource.getDataType().getName());
+                    Log.i(TAG, "Data Source device: " + dataSource.getDevice());
+
 
                     //Let's register a listener to receive Activity data!
-                    if (dataSource.getDataType().equals(TYPE_LOCATION_SAMPLE) && mListener == null) {
-                        Log.i(TAG, "Data source for LOCATION_SAMPLE found!  Registering.");
-                        registerFitnessDataListener(dataSource, TYPE_LOCATION_SAMPLE);
+                    final DataType dataType = dataSource.getDataType();
+                    if ((dataType.equals(DataType.TYPE_LOCATION_SAMPLE) ||
+                            dataType.equals(DataType.TYPE_STEP_COUNT_DELTA) ||
+                            dataType.equals(DataType.TYPE_DISTANCE_DELTA))) {
+                        registerFitnessDataListener(dataSource, dataType);
                     }
                 }
             }
@@ -214,7 +249,10 @@ public class MainActivity extends AppCompatActivity {
      * {@link DataType} combo.
      */
     private void registerFitnessDataListener(DataSource dataSource, DataType dataType) {
-        mListener = new OnDataPointListener() {
+
+        Log.i(TAG, "Registering for datasource: " + dataSource + ", datatype: " + dataType.getName());
+
+        OnDataPointListener listener = new OnDataPointListener() {
             @Override
             public void onDataPoint(DataPoint dataPoint) {
                 for (Field field : dataPoint.getDataType().getFields()) {
@@ -225,14 +263,18 @@ public class MainActivity extends AppCompatActivity {
             }
         };
 
+        mListeners.add(listener);
+
+        SensorRequest request = new SensorRequest.Builder()
+                .setDataSource(dataSource) // Optional but recommended for custom data sets.
+                .setDataType(dataType) // Can't be omitted.
+                .setSamplingRate(3, TimeUnit.SECONDS)
+                .build();
+
         Fitness.SensorsApi.add(
                 mClient,
-                new SensorRequest.Builder()
-                        .setDataSource(dataSource) // Optional but recommended for custom data sets.
-                        .setDataType(dataType) // Can't be omitted.
-                        .setSamplingRate(10, TimeUnit.SECONDS)
-                        .build(),
-                mListener)
+                request,
+                listener)
                 .setResultCallback(new ResultCallback<Status>() {
                     @Override
                     public void onResult(Status status) {
@@ -245,11 +287,26 @@ public class MainActivity extends AppCompatActivity {
                 });
     }
 
+    @Override
+    public void onActivityResult(int requestCode, int resultCode, Intent data) {
+        if (requestCode == REQUEST_OAUTH) {
+            Log.i(TAG, "onActivityResult: REQUEST_OAUTH");
+            authInProgress = false;
+            if (resultCode == Activity.RESULT_OK) {
+                // Make sure the app is not already connected or attempting to connect
+                if (!mClient.isConnecting() && !mClient.isConnected()) {
+                    Log.i(TAG, "onActivityResult: client.connect()");
+                    mClient.connect();
+                }
+            }
+        }
+    }
+
     /**
      * Unregister the listener with the Sensors API.
      */
     private void unregisterFitnessDataListener() {
-        if (mListener == null) {
+        if (mListeners ==  null || mListeners.isEmpty()) {
             // This code only activates one listener at a time.  If there's no listener, there's
             // nothing to unregister.
             return;
@@ -258,19 +315,26 @@ public class MainActivity extends AppCompatActivity {
         // Waiting isn't actually necessary as the unregister call will complete regardless,
         // even if called from within onStop, but a callback can still be added in order to
         // inspect the results.
-        Fitness.SensorsApi.remove(
-                mClient,
-                mListener)
-                .setResultCallback(new ResultCallback<Status>() {
-                    @Override
-                    public void onResult(Status status) {
-                        if (status.isSuccess()) {
-                            Log.i(TAG, "Listener was removed!");
-                        } else {
-                            Log.i(TAG, "Listener was not removed.");
-                        }
-                    }
-                });
+
+        for (OnDataPointListener listener : mListeners) {
+
+            if (mClient != null && mClient.isConnected()) {
+
+                Fitness.SensorsApi.remove(
+                        mClient,
+                        listener)
+                        .setResultCallback(new ResultCallback<Status>() {
+                            @Override
+                            public void onResult(Status status) {
+                                if (status.isSuccess()) {
+                                    Log.i(TAG, "Listener was removed!");
+                                } else {
+                                    Log.i(TAG, "Listener was not removed.");
+                                }
+                            }
+                        });
+            }
+        }
     }
 
 
@@ -301,8 +365,9 @@ public class MainActivity extends AppCompatActivity {
      * Return the current state of the permissions needed.
      */
     private boolean isPermissionGranted() {
-        int permissionState = ActivityCompat.checkSelfPermission(this, ACCESS_FINE_LOCATION);
-        return permissionState == PackageManager.PERMISSION_GRANTED;
+        int permissionState1 = ActivityCompat.checkSelfPermission(this, ACCESS_FINE_LOCATION);
+
+        return permissionState1 == PackageManager.PERMISSION_GRANTED;
     }
 
     private void requestPermissions() {
@@ -335,7 +400,7 @@ public class MainActivity extends AppCompatActivity {
 
     private void requestPermissionForLocation() {
         ActivityCompat.requestPermissions(MainActivity.this,
-                new String[]{ACCESS_FINE_LOCATION},
+                new String[]{ACCESS_FINE_LOCATION, READ_CONTACTS},
                 REQUEST_PERMISSIONS_REQUEST_CODE);
     }
 
