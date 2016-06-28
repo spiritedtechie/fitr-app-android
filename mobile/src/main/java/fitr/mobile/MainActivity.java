@@ -4,7 +4,6 @@ import android.app.Activity;
 import android.content.Intent;
 import android.content.IntentSender;
 import android.content.pm.PackageManager;
-import android.graphics.Color;
 import android.net.Uri;
 import android.os.Bundle;
 import android.provider.Settings;
@@ -12,98 +11,166 @@ import android.support.annotation.NonNull;
 import android.support.design.widget.Snackbar;
 import android.support.v4.app.ActivityCompat;
 import android.support.v7.app.AppCompatActivity;
+import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
+import android.widget.ArrayAdapter;
+import android.widget.Button;
+import android.widget.Spinner;
+import android.widget.Toast;
 
-import static android.Manifest.permission.*;
-
-
+import com.github.mikephil.charting.charts.BarChart;
+import com.github.mikephil.charting.data.BarData;
+import com.github.mikephil.charting.data.BarDataSet;
+import com.github.mikephil.charting.data.BarEntry;
 import com.google.android.gms.common.ConnectionResult;
 import com.google.android.gms.common.api.GoogleApiClient;
 import com.google.android.gms.common.api.GoogleApiClient.ConnectionCallbacks;
+import com.google.android.gms.common.api.GoogleApiClient.OnConnectionFailedListener;
 import com.google.android.gms.common.api.ResultCallback;
 import com.google.android.gms.common.api.Status;
 import com.google.android.gms.fitness.Fitness;
+import com.google.android.gms.fitness.FitnessActivities;
+import com.google.android.gms.fitness.FitnessStatusCodes;
+import com.google.android.gms.fitness.data.Bucket;
 import com.google.android.gms.fitness.data.DataPoint;
-import com.google.android.gms.fitness.data.DataSource;
+import com.google.android.gms.fitness.data.DataSet;
 import com.google.android.gms.fitness.data.DataType;
 import com.google.android.gms.fitness.data.Field;
+import com.google.android.gms.fitness.data.Session;
 import com.google.android.gms.fitness.data.Value;
-import com.google.android.gms.fitness.request.DataSourcesRequest;
-import com.google.android.gms.fitness.request.OnDataPointListener;
-import com.google.android.gms.fitness.request.SensorRequest;
-import com.google.android.gms.fitness.result.DataSourcesResult;
+import com.google.android.gms.fitness.request.DataReadRequest;
+import com.google.android.gms.fitness.result.DataReadResult;
+import com.google.android.gms.fitness.result.ListSubscriptionsResult;
+import com.google.android.gms.fitness.result.SessionStopResult;
 
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Calendar;
+import java.util.Date;
 import java.util.List;
+import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
-import fitr.common.logger.Log;
-import fitr.common.logger.LogView;
-import fitr.common.logger.LogWrapper;
-import fitr.common.logger.MessageOnlyLogFilter;
+import static android.Manifest.permission.ACCESS_FINE_LOCATION;
 
-import static com.google.android.gms.fitness.data.DataType.TYPE_STEP_COUNT_CUMULATIVE;
-
-
-/**
- * This sample demonstrates how to use the Sensors API of the Google Fit platform to find
- * available data sources and to register/unregister listeners to those sources. It also
- * demonstrates how to authenticate a user with Google Play Services.
- */
 public class MainActivity extends AppCompatActivity {
 
-    public static final String TAG = "BasicSensorsApi";
+    public static final String TAG = "SensorActivity";
 
     private static final String AUTH_PENDING = "auth_state_pending";
 
     private static final int REQUEST_OAUTH = 1;
 
-    private GoogleApiClient mClient = null;
-
     private static final int REQUEST_PERMISSIONS_REQUEST_CODE = 34;
 
-    // Need to hold a reference to this listener, as it's passed into the "unregister"
-    // method in order to stop all sensors from sending data to this listener.
-    private boolean authInProgress = false;
-    private List<OnDataPointListener> mListeners;
+    // Views
+    private Spinner dropDownListActivityType;
 
+    private Button btnStart;
+    private Button btnStop;
+    private Button btnRefresh;
+    private BarChart barChart;
+
+    private boolean authInProgress = false;
+
+    private GoogleApiClient mClient = null;
+    private Session session;
+    /**
+     * ATTENTION: This was auto-generated to implement the App Indexing API.
+     * See https://g.co/AppIndexing/AndroidStudio for more information.
+     */
+    private GoogleApiClient client;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        // Put application specific code here.
 
         setContentView(R.layout.activity_main);
-        // This method sets up our custom logger, which will print all log messages to the device
-        // screen, as well as to adb logcat.
 
         if (savedInstanceState != null) {
             authInProgress = savedInstanceState.getBoolean(AUTH_PENDING);
         }
 
+        // Get views
+        barChart = (BarChart) findViewById(R.id.chart);
+        btnStart = (Button) findViewById(R.id.btn_start);
+        btnStop = (Button) findViewById(R.id.btn_stop);
+        btnRefresh = (Button) findViewById(R.id.btn_refresh_chart);
+        dropDownListActivityType = (Spinner) findViewById(R.id.ddl_activity_type);
+
+        // Set up drop down list for activities
+        List<String> activities = new ArrayList<>();
+        activities.add(FitnessActivities.RUNNING);
+        activities.add(FitnessActivities.WALKING);
+        activities.add(FitnessActivities.BIKING);
+        ArrayAdapter<String> adapter = new ArrayAdapter<>(this, android.R.layout.simple_spinner_item, activities);
+        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        dropDownListActivityType.setAdapter(adapter);
+
+        // Configure chart
+        barChart.animateX(3000);
+        barChart.animateY(3000);
+
+        // Build client
         if (!isPermissionGranted()) {
             requestPermissions();
         } else {
             buildFitnessClient();
         }
 
+        // Button listeners
+        btnStart.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
 
-        initializeLogging();
+                subscribe();
+                startSession();
+            }
+        });
+
+        btnStop.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+
+                stopSession();
+                unsubscribe();
+            }
+        });
+
+        btnRefresh.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                refreshHistoricalData();
+            }
+        });
+
+    }
+
+    @Override
+    public void onStart() {
+        super.onStart();
     }
 
     @Override
     protected void onResume() {
         super.onResume();
-
-        // This ensures that if the user denies the permissions then uses Settings to re-enable
-        // them, the app will start working.
     }
 
     @Override
-    protected void onStart() {
-        super.onStart();
+    protected void onStop() {
+        super.onStop();
+
+        if (client != null) {
+            client.disconnect();
+        }
+    }
+
+    @Override
+    protected void onDestroy() {
+        disconnectClient();
+        super.onDestroy();
     }
 
     @Override
@@ -119,35 +186,39 @@ public class MainActivity extends AppCompatActivity {
     }
 
     @Override
-    protected void onStop() {
-        super.onStop();
-
-        unregisterFitnessDataListener();
-    }
-
-    @Override
     protected void onSaveInstanceState(Bundle outState) {
         super.onSaveInstanceState(outState);
         outState.putBoolean(AUTH_PENDING, authInProgress);
     }
 
-    /**
-     * Build a {@link GoogleApiClient} that will authenticate the user and allow the application
-     * to connect to Fitness APIs. The scopes included should match the scopes your app needs
-     * (see documentation for details). Authentication will occasionally fail intentionally,
-     * and in those cases, there will be a known resolution, which the OnConnectionFailedListener()
-     * can address. Examples of this include the user never having signed in before, or having
-     * multiple accounts on the device and needing to specify which account to use, etc.
-     */
-    private void buildFitnessClient() {
+    @Override
+    public void onActivityResult(int requestCode, int resultCode, Intent data) {
+        if (requestCode == REQUEST_OAUTH) {
+            Log.i(TAG, "onActivityResult: REQUEST_OAUTH");
+            authInProgress = false;
+            if (resultCode == Activity.RESULT_OK) {
+                if (mClient != null && !mClient.isConnecting() && !mClient.isConnected()) {
+                    Log.i(TAG, "onActivityResult: client.connect()");
+                    mClient.connect();
+                }
+            }
+        } else {
+            Log.i(TAG, "onActivityResult: request code: " + requestCode);
+        }
+    }
 
+    private void disconnectClient() {
+        Log.i(TAG, "Disconnecting client");
+        if (mClient != null) mClient.disconnect();
+    }
+
+    private void buildFitnessClient() {
         Log.i(TAG, "buildFitnessClient");
         if (mClient == null) {
             mClient = new GoogleApiClient.Builder(this)
-                    .addApi(Fitness.SENSORS_API)
-                    .addScope(Fitness.SCOPE_ACTIVITY_READ_WRITE)
-                    .addScope(Fitness.SCOPE_LOCATION_READ_WRITE)
-                    .addScope(Fitness.SCOPE_NUTRITION_READ_WRITE)
+                    .addApiIfAvailable(Fitness.RECORDING_API)
+                    .addApiIfAvailable(Fitness.SESSIONS_API)
+                    .addApiIfAvailable(Fitness.HISTORY_API)
                     .addConnectionCallbacks(onConnection())
                     .enableAutoManage(this, 0, onConnectionFailed())
                     .build();
@@ -155,8 +226,8 @@ public class MainActivity extends AppCompatActivity {
     }
 
     @NonNull
-    private GoogleApiClient.OnConnectionFailedListener onConnectionFailed() {
-        return new GoogleApiClient.OnConnectionFailedListener() {
+    private OnConnectionFailedListener onConnectionFailed() {
+        return new OnConnectionFailedListener() {
             @Override
             public void onConnectionFailed(ConnectionResult result) {
                 if (!authInProgress) {
@@ -178,195 +249,197 @@ public class MainActivity extends AppCompatActivity {
         return new ConnectionCallbacks() {
             @Override
             public void onConnected(Bundle bundle) {
-                Log.i(TAG, "Connected!!!");
-                // Now you can make calls to the Fitness APIs.
-                findFitnessDataSources();
+                Log.i(TAG, "Client connected");
             }
 
             @Override
             public void onConnectionSuspended(int i) {
-                // If your connection to the sensor gets lost at some point,
-                // you'll be able to determine the reason and react to it here.
                 if (i == CAUSE_NETWORK_LOST) {
-                    Log.i(TAG, "Connection lost.  Cause: Network Lost.");
+                    Log.i(TAG, "Client connection lost.  Cause: Network Lost.");
                 } else if (i == CAUSE_SERVICE_DISCONNECTED) {
-                    Log.i(TAG, "Connection lost.  Reason: Service Disconnected");
+                    Log.i(TAG, "Client connection lost.  Reason: Service Disconnected");
                 }
             }
         };
     }
 
-    /**
-     * Find available data sources and attempt to register on a specific {@link DataType}.
-     * If the application cares about a data type but doesn't care about the source of the data,
-     * this can be skipped entirely, instead calling
-     * {@link com.google.android.gms.fitness.SensorsApi
-     * #register(GoogleApiClient, SensorRequest, DataSourceListener)},
-     * where the {@link SensorRequest} contains the desired data type.
-     */
-    private void findFitnessDataSources() {
-        // Note: Fitness.SensorsApi.findDataSources() requires the ACCESS_FINE_LOCATION permission.
-        Fitness.SensorsApi.findDataSources(mClient, new DataSourcesRequest.Builder()
-                // At least one datatype must be specified.
-                .setDataTypes(DataType.TYPE_LOCATION_SAMPLE,
-                        DataType.TYPE_STEP_COUNT_DELTA,
-                        DataType.TYPE_DISTANCE_DELTA)
-                // Can specify whether data type is raw or derived.
-                .setDataSourceTypes(DataSource.TYPE_RAW, DataSource.TYPE_DERIVED)
-                .build())
-                .setResultCallback(dataSourceResultCallback());
+    private void subscribe() {
+
+        if (mClient != null && mClient.isConnected()) {
+            Fitness.RecordingApi.listSubscriptions(mClient, DataType.TYPE_DISTANCE_DELTA)
+                    .setResultCallback(new ResultCallback<ListSubscriptionsResult>() {
+                        @Override
+                        public void onResult(ListSubscriptionsResult listSubscriptionsResult) {
+                            if (listSubscriptionsResult.getSubscriptions().isEmpty()) {
+                                _subscribe();
+                            }
+                        }
+                    });
+        }
+    }
+
+    public void _subscribe() {
+
+        if (mClient != null && mClient.isConnected()) {
+            Fitness.RecordingApi.subscribe(mClient, DataType.TYPE_DISTANCE_DELTA)
+                    .setResultCallback(new ResultCallback<Status>() {
+                        @Override
+                        public void onResult(Status status) {
+                            if (status.isSuccess()) {
+                                if (status.getStatusCode() == FitnessStatusCodes.SUCCESS_ALREADY_SUBSCRIBED) {
+                                    Log.i(TAG, "Existing subscription for activity detected.");
+                                } else {
+                                    Log.i(TAG, "Successfully subscribed!");
+                                }
+                            } else {
+                                Log.i(TAG, "There was a problem subscribing.");
+                            }
+                        }
+                    });
+        }
+    }
+
+    private void unsubscribe() {
+
+        if (mClient != null && mClient.isConnected()) {
+            Fitness.RecordingApi.unsubscribe(mClient, DataType.TYPE_DISTANCE_DELTA)
+                    .setResultCallback(new ResultCallback<Status>() {
+                        @Override
+                        public void onResult(Status status) {
+                            if (status.isSuccess()) {
+                                Log.i(TAG, "Successfully unsubscribed!");
+                            } else {
+                                Log.i(TAG, "There was a problem unsubscribing.");
+                            }
+                        }
+                    });
+        }
+    }
+
+    private void startSession() {
+
+        if (mClient != null && mClient.isConnected() && session == null) {
+            String selectedActivity = dropDownListActivityType.getSelectedItem().toString();
+            Date currTime = new Date();
+            SimpleDateFormat df = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss");
+            String sessionName = selectedActivity + "-" + df.format(currTime);
+
+            session = new Session.Builder()
+                    .setName(sessionName)
+                    .setIdentifier(UUID.randomUUID().toString())
+                    .setDescription("Session of " + selectedActivity)
+                    .setStartTime(currTime.getTime(), TimeUnit.MILLISECONDS)
+                    .setActivity(selectedActivity)
+                    .build();
+
+            Fitness.SessionsApi.startSession(mClient, session).setResultCallback(new ResultCallback<Status>() {
+                @Override
+                public void onResult(@NonNull Status status) {
+                    if (status.isSuccess()) {
+                        Log.i(TAG, "Successfully started session " + session.getIdentifier());
+                    } else {
+                        Log.i(TAG, "There was a problem starting session.");
+                    }
+                }
+            });
+        }
+    }
+
+    private void stopSession() {
+
+        if (mClient != null && mClient.isConnected() && session != null && session.isOngoing()) {
+            Fitness.SessionsApi.stopSession(mClient, session.getIdentifier()).setResultCallback(new ResultCallback<SessionStopResult>() {
+                @Override
+                public void onResult(@NonNull SessionStopResult sessionStopResult) {
+                    if (sessionStopResult.getStatus().isSuccess()) {
+                        Log.i(TAG, "Successfully stopped session " + session.getIdentifier());
+                        notifySessionStopped(sessionStopResult);
+                        MainActivity.this.session = null;
+                    } else {
+                        Log.i(TAG, "There was a problem stopping session.");
+                    }
+                }
+            });
+        }
+    }
+
+    private void notifySessionStopped(@NonNull SessionStopResult sessionStopResult) {
+        if (!sessionStopResult.getSessions().isEmpty()) {
+            Session session = sessionStopResult.getSessions().get(0);
+            String toastMsg = "Session stopped." +
+                    "\nIt started at " + formatTime(session.getStartTime(TimeUnit.MILLISECONDS)) +
+                    "\nIt ended at " + formatTime(session.getEndTime(TimeUnit.MILLISECONDS));
+            Toast.makeText(MainActivity.this, toastMsg, Toast.LENGTH_LONG).show();
+        }
+    }
+
+    private void refreshHistoricalData() {
+
+        if (mClient != null && mClient.isConnected() && barChart != null) {
+
+            Calendar cal = Calendar.getInstance();
+            Date now = new Date();
+            cal.setTime(now);
+            long endTime = cal.getTimeInMillis();
+            cal.add(Calendar.WEEK_OF_YEAR, -2);
+            long startTime = cal.getTimeInMillis();
+
+            DataReadRequest readRequest = new DataReadRequest.Builder()
+                    .aggregate(DataType.TYPE_DISTANCE_DELTA, DataType.AGGREGATE_DISTANCE_DELTA)
+                    .bucketByTime(1, TimeUnit.DAYS)
+                    .setTimeRange(startTime, endTime, TimeUnit.MILLISECONDS)
+                    .build();
+
+            Fitness.HistoryApi.readData(mClient, readRequest).setResultCallback(new ResultCallback<DataReadResult>() {
+                @Override
+                public void onResult(@NonNull DataReadResult dataReadResult) {
+                    List<Float> distanceAggregateData = extractData(dataReadResult);
+
+                    updateBarChart(distanceAggregateData);
+                }
+            });
+        }
     }
 
     @NonNull
-    private ResultCallback<DataSourcesResult> dataSourceResultCallback() {
-        return new ResultCallback<DataSourcesResult>() {
-            @Override
-            public void onResult(DataSourcesResult dataSourcesResult) {
-                Log.i(TAG, "Result: " + dataSourcesResult.getStatus().toString());
+    private List<Float> extractData(@NonNull DataReadResult dataReadResult) {
+        List<Float> distanceAggregateData = new ArrayList<>();
 
-                mListeners = new ArrayList<>();
-
-                for (DataSource dataSource : dataSourcesResult.getDataSources()) {
-                    Log.i(TAG, "Data source found: " + dataSource.toString());
-                    Log.i(TAG, "*** Data Source type: " + dataSource.getDataType().getName());
-                    Log.i(TAG, "Data Source device: " + dataSource.getDevice());
-
-
-                    //Let's register a listener to receive Activity data!
-                    final DataType dataType = dataSource.getDataType();
-                    if ((dataType.equals(DataType.TYPE_LOCATION_SAMPLE) ||
-                            dataType.equals(DataType.TYPE_STEP_COUNT_DELTA) ||
-                            dataType.equals(DataType.TYPE_DISTANCE_DELTA))) {
-                        registerFitnessDataListener(dataSource, dataType);
-                    }
-                }
-            }
-        };
-    }
-
-    /**
-     * Register a listener with the Sensors API for the provided {@link DataSource} and
-     * {@link DataType} combo.
-     */
-    private void registerFitnessDataListener(DataSource dataSource, DataType dataType) {
-
-        Log.i(TAG, "Registering for datasource: " + dataSource + ", datatype: " + dataType.getName());
-
-        OnDataPointListener listener = new OnDataPointListener() {
-            @Override
-            public void onDataPoint(DataPoint dataPoint) {
-                for (Field field : dataPoint.getDataType().getFields()) {
-                    Value val = dataPoint.getValue(field);
-                    Log.i(TAG, "Detected DataPoint field: " + field.getName());
-                    Log.i(TAG, "Detected DataPoint value: " + val);
-                }
-            }
-        };
-
-        mListeners.add(listener);
-
-        SensorRequest request = new SensorRequest.Builder()
-                .setDataSource(dataSource) // Optional but recommended for custom data sets.
-                .setDataType(dataType) // Can't be omitted.
-                .setSamplingRate(3, TimeUnit.SECONDS)
-                .build();
-
-        Fitness.SensorsApi.add(
-                mClient,
-                request,
-                listener)
-                .setResultCallback(new ResultCallback<Status>() {
-                    @Override
-                    public void onResult(Status status) {
-                        if (status.isSuccess()) {
-                            Log.i(TAG, "Listener registered!");
-                        } else {
-                            Log.i(TAG, "Listener not registered.");
-                        }
-                    }
-                });
-    }
-
-    @Override
-    public void onActivityResult(int requestCode, int resultCode, Intent data) {
-        if (requestCode == REQUEST_OAUTH) {
-            Log.i(TAG, "onActivityResult: REQUEST_OAUTH");
-            authInProgress = false;
-            if (resultCode == Activity.RESULT_OK) {
-                // Make sure the app is not already connected or attempting to connect
-                if (!mClient.isConnecting() && !mClient.isConnected()) {
-                    Log.i(TAG, "onActivityResult: client.connect()");
-                    mClient.connect();
-                }
+        for (Bucket bucket : dataReadResult.getBuckets()) {
+            DataSet dataSet = bucket.getDataSet(DataType.AGGREGATE_DISTANCE_DELTA);
+            for (DataPoint dp : dataSet.getDataPoints()) {
+                Value value = dp.getValue(Field.FIELD_DISTANCE);
+                float distance = value.asFloat();
+                distanceAggregateData.add(distance);
             }
         }
+        return distanceAggregateData;
     }
 
-    /**
-     * Unregister the listener with the Sensors API.
-     */
-    private void unregisterFitnessDataListener() {
-        if (mListeners ==  null || mListeners.isEmpty()) {
-            // This code only activates one listener at a time.  If there's no listener, there's
-            // nothing to unregister.
-            return;
+    private void updateBarChart(List<Float> vals) {
+        barChart.invalidate();
+
+        List<String> xValues = new ArrayList<>();
+        List<BarEntry> barEntries = new ArrayList<>();
+        for (int i = 0; i < vals.size(); i++) {
+            BarEntry be = new BarEntry(vals.get(i), i);
+            barEntries.add(be);
+            xValues.add(String.valueOf(i));
         }
 
-        // Waiting isn't actually necessary as the unregister call will complete regardless,
-        // even if called from within onStop, but a callback can still be added in order to
-        // inspect the results.
-
-        for (OnDataPointListener listener : mListeners) {
-
-            if (mClient != null && mClient.isConnected()) {
-
-                Fitness.SensorsApi.remove(
-                        mClient,
-                        listener)
-                        .setResultCallback(new ResultCallback<Status>() {
-                            @Override
-                            public void onResult(Status status) {
-                                if (status.isSuccess()) {
-                                    Log.i(TAG, "Listener was removed!");
-                                } else {
-                                    Log.i(TAG, "Listener was not removed.");
-                                }
-                            }
-                        });
-            }
-        }
+        BarDataSet bds = new BarDataSet(barEntries, "Total distance (m)");
+        BarData bd = new BarData(xValues, bds);
+        barChart.setData(bd);
+        barChart.notifyDataSetChanged();
     }
 
-
-    /**
-     * Initialize a custom log class that outputs both to in-app targets and logcat.
-     */
-    private void initializeLogging() {
-        // Wraps Android's native log framework.
-        LogWrapper logWrapper = new LogWrapper();
-        // Using Log, front-end to the logging chain, emulates android.util.log method signatures.
-        Log.setLogNode(logWrapper);
-        // Filter strips out everything except the message text.
-        MessageOnlyLogFilter msgFilter = new MessageOnlyLogFilter();
-        logWrapper.setNext(msgFilter);
-        // On screen logging via a customized TextView.
-        LogView logView = (LogView) findViewById(R.id.sample_logview);
-
-        // Fixing this lint errors adds logic without benefit.
-        //noinspection AndroidLintDeprecation
-        logView.setTextAppearance(this, R.style.Log);
-
-        logView.setBackgroundColor(Color.WHITE);
-        msgFilter.setNext(logView);
-        Log.i(TAG, "Ready");
+    private String formatTime(long timeMillis) {
+        SimpleDateFormat df = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss");
+        return df.format(new Date(timeMillis));
     }
 
-    /**
-     * Return the current state of the permissions needed.
-     */
     private boolean isPermissionGranted() {
         int permissionState1 = ActivityCompat.checkSelfPermission(this, ACCESS_FINE_LOCATION);
-
         return permissionState1 == PackageManager.PERMISSION_GRANTED;
     }
 
@@ -400,13 +473,10 @@ public class MainActivity extends AppCompatActivity {
 
     private void requestPermissionForLocation() {
         ActivityCompat.requestPermissions(MainActivity.this,
-                new String[]{ACCESS_FINE_LOCATION, READ_CONTACTS},
+                new String[]{ACCESS_FINE_LOCATION},
                 REQUEST_PERMISSIONS_REQUEST_CODE);
     }
 
-    /**
-     * Callback received when a permissions request has been completed.
-     */
     @Override
     public void onRequestPermissionsResult(int requestCode,
                                            @NonNull String[] permissions,
@@ -420,6 +490,7 @@ public class MainActivity extends AppCompatActivity {
             } else if (grantResults[0] == PackageManager.PERMISSION_GRANTED) {
                 // Permission was granted.
                 buildFitnessClient();
+                mClient.connect();
             } else {
                 displayPermissionDeniedExplanation();
             }
