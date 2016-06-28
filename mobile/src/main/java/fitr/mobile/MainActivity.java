@@ -18,6 +18,9 @@ import android.view.View;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.Spinner;
+import android.widget.TableLayout;
+import android.widget.TableRow;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import com.github.mikephil.charting.charts.BarChart;
@@ -54,6 +57,9 @@ import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
 import static android.Manifest.permission.ACCESS_FINE_LOCATION;
+import static com.google.android.gms.fitness.FitnessStatusCodes.*;
+import static com.google.android.gms.fitness.data.DataType.*;
+import static java.util.concurrent.TimeUnit.*;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -72,6 +78,7 @@ public class MainActivity extends AppCompatActivity {
     private Button btnStop;
     private Button btnRefresh;
     private BarChart barChart;
+    private TableLayout table;
 
     private boolean authInProgress = false;
 
@@ -94,11 +101,12 @@ public class MainActivity extends AppCompatActivity {
         }
 
         // Get views
-        barChart = (BarChart) findViewById(R.id.chart);
         btnStart = (Button) findViewById(R.id.btn_start);
         btnStop = (Button) findViewById(R.id.btn_stop);
         btnRefresh = (Button) findViewById(R.id.btn_refresh_chart);
         dropDownListActivityType = (Spinner) findViewById(R.id.ddl_activity_type);
+        barChart = (BarChart) findViewById(R.id.chart);
+        table = (TableLayout) findViewById(R.id.table);
 
         // Set up drop down list for activities
         List<String> activities = new ArrayList<>();
@@ -124,7 +132,6 @@ public class MainActivity extends AppCompatActivity {
         btnStart.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-
                 subscribe();
                 startSession();
             }
@@ -133,7 +140,6 @@ public class MainActivity extends AppCompatActivity {
         btnStop.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-
                 stopSession();
                 unsubscribe();
             }
@@ -145,7 +151,6 @@ public class MainActivity extends AppCompatActivity {
                 refreshHistoricalData();
             }
         });
-
     }
 
     @Override
@@ -250,6 +255,7 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onConnected(Bundle bundle) {
                 Log.i(TAG, "Client connected");
+                subscribe();
             }
 
             @Override
@@ -265,8 +271,8 @@ public class MainActivity extends AppCompatActivity {
 
     private void subscribe() {
 
-        if (mClient != null && mClient.isConnected()) {
-            Fitness.RecordingApi.listSubscriptions(mClient, DataType.TYPE_DISTANCE_DELTA)
+        if (mClient != null) {
+            Fitness.RecordingApi.listSubscriptions(mClient, TYPE_DISTANCE_DELTA)
                     .setResultCallback(new ResultCallback<ListSubscriptionsResult>() {
                         @Override
                         public void onResult(ListSubscriptionsResult listSubscriptionsResult) {
@@ -281,15 +287,16 @@ public class MainActivity extends AppCompatActivity {
     public void _subscribe() {
 
         if (mClient != null && mClient.isConnected()) {
-            Fitness.RecordingApi.subscribe(mClient, DataType.TYPE_DISTANCE_DELTA)
+            Fitness.RecordingApi.subscribe(mClient, TYPE_DISTANCE_DELTA)
                     .setResultCallback(new ResultCallback<Status>() {
                         @Override
                         public void onResult(Status status) {
                             if (status.isSuccess()) {
-                                if (status.getStatusCode() == FitnessStatusCodes.SUCCESS_ALREADY_SUBSCRIBED) {
+                                if (status.getStatusCode() == SUCCESS_ALREADY_SUBSCRIBED) {
                                     Log.i(TAG, "Existing subscription for activity detected.");
                                 } else {
                                     Log.i(TAG, "Successfully subscribed!");
+                                    refreshHistoricalData();
                                 }
                             } else {
                                 Log.i(TAG, "There was a problem subscribing.");
@@ -302,7 +309,7 @@ public class MainActivity extends AppCompatActivity {
     private void unsubscribe() {
 
         if (mClient != null && mClient.isConnected()) {
-            Fitness.RecordingApi.unsubscribe(mClient, DataType.TYPE_DISTANCE_DELTA)
+            Fitness.RecordingApi.unsubscribe(mClient, TYPE_DISTANCE_DELTA)
                     .setResultCallback(new ResultCallback<Status>() {
                         @Override
                         public void onResult(Status status) {
@@ -328,7 +335,7 @@ public class MainActivity extends AppCompatActivity {
                     .setName(sessionName)
                     .setIdentifier(UUID.randomUUID().toString())
                     .setDescription("Session of " + selectedActivity)
-                    .setStartTime(currTime.getTime(), TimeUnit.MILLISECONDS)
+                    .setStartTime(currTime.getTime(), MILLISECONDS)
                     .setActivity(selectedActivity)
                     .build();
 
@@ -367,8 +374,8 @@ public class MainActivity extends AppCompatActivity {
         if (!sessionStopResult.getSessions().isEmpty()) {
             Session session = sessionStopResult.getSessions().get(0);
             String toastMsg = "Session stopped." +
-                    "\nIt started at " + formatTime(session.getStartTime(TimeUnit.MILLISECONDS)) +
-                    "\nIt ended at " + formatTime(session.getEndTime(TimeUnit.MILLISECONDS));
+                    "\nIt started at " + formatTime(session.getStartTime(MILLISECONDS)) +
+                    "\nIt ended at " + formatTime(session.getEndTime(MILLISECONDS));
             Toast.makeText(MainActivity.this, toastMsg, Toast.LENGTH_LONG).show();
         }
     }
@@ -385,44 +392,69 @@ public class MainActivity extends AppCompatActivity {
             long startTime = cal.getTimeInMillis();
 
             DataReadRequest readRequest = new DataReadRequest.Builder()
-                    .aggregate(DataType.TYPE_DISTANCE_DELTA, DataType.AGGREGATE_DISTANCE_DELTA)
-                    .bucketByTime(1, TimeUnit.DAYS)
-                    .setTimeRange(startTime, endTime, TimeUnit.MILLISECONDS)
+                    .aggregate(TYPE_DISTANCE_DELTA, AGGREGATE_DISTANCE_DELTA)
+                    .bucketByTime(1, DAYS)
+                    .setTimeRange(startTime, endTime, MILLISECONDS)
                     .build();
 
             Fitness.HistoryApi.readData(mClient, readRequest).setResultCallback(new ResultCallback<DataReadResult>() {
                 @Override
                 public void onResult(@NonNull DataReadResult dataReadResult) {
-                    List<Float> distanceAggregateData = extractData(dataReadResult);
-
+                    List<DistanceAggregate> distanceAggregateData = extractData(dataReadResult);
                     updateBarChart(distanceAggregateData);
+                    createTable(distanceAggregateData);
                 }
             });
         }
     }
 
+    private void createTable(List<DistanceAggregate> data) {
+
+        for (DistanceAggregate dataItem : data) {
+            TableRow tr = new TableRow(this);
+            tr.setPadding(0, 10, 0, 0);
+            TextView c1 = new TextView(this);
+            c1.setPadding(0,0,20,0);
+            c1.setText(formatTime(dataItem.getStartDate().getTime()));
+            TextView c2 = new TextView(this);
+            c2.setPadding(0,0,20,0);
+            c2.setText(formatTime(dataItem.getEndDate().getTime()));
+            TextView c3 = new TextView(this);
+            c3.setPadding(0,0,20,0);
+            c3.setText(String.valueOf(dataItem.getDistanceInMeters()));
+            tr.addView(c1);
+            tr.addView(c2);
+            tr.addView(c3);
+            table.addView(tr);
+        }
+    }
+
     @NonNull
-    private List<Float> extractData(@NonNull DataReadResult dataReadResult) {
-        List<Float> distanceAggregateData = new ArrayList<>();
+    private List<DistanceAggregate> extractData(@NonNull DataReadResult dataReadResult) {
+        List<DistanceAggregate> distanceAggregateData = new ArrayList<>();
 
         for (Bucket bucket : dataReadResult.getBuckets()) {
-            DataSet dataSet = bucket.getDataSet(DataType.AGGREGATE_DISTANCE_DELTA);
+            DataSet dataSet = bucket.getDataSet(AGGREGATE_DISTANCE_DELTA);
             for (DataPoint dp : dataSet.getDataPoints()) {
                 Value value = dp.getValue(Field.FIELD_DISTANCE);
+
+                Date startDate = new Date(dp.getStartTime(MILLISECONDS));
+                Date endDate = new Date(dp.getEndTime(MILLISECONDS));
                 float distance = value.asFloat();
-                distanceAggregateData.add(distance);
+
+                distanceAggregateData.add(new DistanceAggregate(startDate, endDate, distance));
             }
         }
         return distanceAggregateData;
     }
 
-    private void updateBarChart(List<Float> vals) {
+    private void updateBarChart(List<DistanceAggregate> data) {
         barChart.invalidate();
 
         List<String> xValues = new ArrayList<>();
         List<BarEntry> barEntries = new ArrayList<>();
-        for (int i = 0; i < vals.size(); i++) {
-            BarEntry be = new BarEntry(vals.get(i), i);
+        for (int i = 0; i < data.size(); i++) {
+            BarEntry be = new BarEntry(data.get(i).getDistanceInMeters(), i);
             barEntries.add(be);
             xValues.add(String.valueOf(i));
         }

@@ -1,7 +1,7 @@
 <resources>
     <string name="app_name">Fitr</string>
 
-    <string name="intro_text">Record and chart your distance</string>
+    <string name="intro_text">Select your activity and hit Start!</string>
 
     <string name="permission_rationale">Location data is used as part of the Google Fit API</string>
     <string name="permission_denied_explanation">Permission was denied, but is needed for core

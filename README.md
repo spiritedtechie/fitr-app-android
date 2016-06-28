@@ -3,7 +3,7 @@ Setup
 
 1. Goto the Google API console (https://console.developers.google.com/apis/library)
 
-2. Create a new project
+2. Create a new project (Fitr)
 
 3. Enable the Google Fit APIs
 
