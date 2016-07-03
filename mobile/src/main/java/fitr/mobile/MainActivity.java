@@ -2,7 +2,6 @@ package fitr.mobile;
 
 import android.app.Activity;
 import android.content.Intent;
-import android.content.IntentSender;
 import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.os.Bundle;
@@ -27,26 +26,15 @@ import com.github.mikephil.charting.charts.BarChart;
 import com.github.mikephil.charting.data.BarData;
 import com.github.mikephil.charting.data.BarDataSet;
 import com.github.mikephil.charting.data.BarEntry;
-import com.google.android.gms.common.ConnectionResult;
-import com.google.android.gms.common.api.GoogleApiClient;
-import com.google.android.gms.common.api.GoogleApiClient.ConnectionCallbacks;
-import com.google.android.gms.common.api.GoogleApiClient.OnConnectionFailedListener;
-import com.google.android.gms.common.api.ResultCallback;
-import com.google.android.gms.common.api.Status;
-import com.google.android.gms.fitness.Fitness;
 import com.google.android.gms.fitness.FitnessActivities;
-import com.google.android.gms.fitness.FitnessStatusCodes;
 import com.google.android.gms.fitness.data.Bucket;
 import com.google.android.gms.fitness.data.DataPoint;
 import com.google.android.gms.fitness.data.DataSet;
-import com.google.android.gms.fitness.data.DataType;
 import com.google.android.gms.fitness.data.Field;
 import com.google.android.gms.fitness.data.Session;
 import com.google.android.gms.fitness.data.Value;
 import com.google.android.gms.fitness.request.DataReadRequest;
 import com.google.android.gms.fitness.result.DataReadResult;
-import com.google.android.gms.fitness.result.ListSubscriptionsResult;
-import com.google.android.gms.fitness.result.SessionStopResult;
 
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -54,12 +42,21 @@ import java.util.Calendar;
 import java.util.Date;
 import java.util.List;
 import java.util.UUID;
-import java.util.concurrent.TimeUnit;
+
+import fitr.mobile.google.FitnessClientManager;
+import fitr.mobile.google.FitnessHistoryHelper;
+import fitr.mobile.google.FitnessHistoryHelperImpl;
+import fitr.mobile.google.FitnessRecordingHelper;
+import fitr.mobile.google.FitnessRecordingHelperImpl;
+import fitr.mobile.google.FitnessSessionHelper;
+import fitr.mobile.google.FitnessSessionHelperImpl;
+import rx.functions.Func1;
 
 import static android.Manifest.permission.ACCESS_FINE_LOCATION;
-import static com.google.android.gms.fitness.FitnessStatusCodes.*;
-import static com.google.android.gms.fitness.data.DataType.*;
-import static java.util.concurrent.TimeUnit.*;
+import static com.google.android.gms.fitness.data.DataType.AGGREGATE_DISTANCE_DELTA;
+import static com.google.android.gms.fitness.data.DataType.TYPE_DISTANCE_DELTA;
+import static java.util.concurrent.TimeUnit.DAYS;
+import static java.util.concurrent.TimeUnit.MILLISECONDS;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -71,24 +68,23 @@ public class MainActivity extends AppCompatActivity {
 
     private static final int REQUEST_PERMISSIONS_REQUEST_CODE = 34;
 
+    private static final String DATE_FORMAT_PATTERN_DEFAULT = "yyyy-MM-dd'T'HH:mm:ss";
+
     // Views
     private Spinner dropDownListActivityType;
-
     private Button btnStart;
     private Button btnStop;
     private Button btnRefresh;
     private BarChart barChart;
     private TableLayout table;
 
-    private boolean authInProgress = false;
+    private FitnessClientManager fcm;
+    private FitnessRecordingHelper frh;
+    private FitnessSessionHelper fsh;
+    private FitnessHistoryHelper fhh;
 
-    private GoogleApiClient mClient = null;
+
     private Session session;
-    /**
-     * ATTENTION: This was auto-generated to implement the App Indexing API.
-     * See https://g.co/AppIndexing/AndroidStudio for more information.
-     */
-    private GoogleApiClient client;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -96,15 +92,13 @@ public class MainActivity extends AppCompatActivity {
 
         setContentView(R.layout.activity_main);
 
-        if (savedInstanceState != null) {
-            authInProgress = savedInstanceState.getBoolean(AUTH_PENDING);
-        }
+        fcm = new FitnessClientManager(this);
 
         // Get views
+        dropDownListActivityType = (Spinner) findViewById(R.id.ddl_activity_type);
         btnStart = (Button) findViewById(R.id.btn_start);
         btnStop = (Button) findViewById(R.id.btn_stop);
         btnRefresh = (Button) findViewById(R.id.btn_refresh_chart);
-        dropDownListActivityType = (Spinner) findViewById(R.id.ddl_activity_type);
         barChart = (BarChart) findViewById(R.id.chart);
         table = (TableLayout) findViewById(R.id.table);
 
@@ -125,8 +119,14 @@ public class MainActivity extends AppCompatActivity {
         if (!isPermissionGranted()) {
             requestPermissions();
         } else {
-            buildFitnessClient();
+            fcm.buildFitnessClient();
+            fcm.connect();
         }
+
+        frh = new FitnessRecordingHelperImpl(fcm.getClient());
+        fsh = new FitnessSessionHelperImpl(fcm.getClient());
+        fhh = new FitnessHistoryHelperImpl(fcm.getClient());
+
 
         // Button listeners
         btnStart.setOnClickListener(new View.OnClickListener() {
@@ -153,10 +153,6 @@ public class MainActivity extends AppCompatActivity {
         });
     }
 
-    @Override
-    public void onStart() {
-        super.onStart();
-    }
 
     @Override
     protected void onResume() {
@@ -164,17 +160,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     @Override
-    protected void onStop() {
-        super.onStop();
-
-        if (client != null) {
-            client.disconnect();
-        }
-    }
-
-    @Override
     protected void onDestroy() {
-        disconnectClient();
         super.onDestroy();
     }
 
@@ -193,18 +179,16 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onSaveInstanceState(Bundle outState) {
         super.onSaveInstanceState(outState);
-        outState.putBoolean(AUTH_PENDING, authInProgress);
     }
 
     @Override
     public void onActivityResult(int requestCode, int resultCode, Intent data) {
         if (requestCode == REQUEST_OAUTH) {
             Log.i(TAG, "onActivityResult: REQUEST_OAUTH");
-            authInProgress = false;
             if (resultCode == Activity.RESULT_OK) {
-                if (mClient != null && !mClient.isConnecting() && !mClient.isConnected()) {
+                if (fcm.getClient() != null && !fcm.getClient().isConnecting() && !fcm.getClient().isConnected()) {
                     Log.i(TAG, "onActivityResult: client.connect()");
-                    mClient.connect();
+                    fcm.connect();
                 }
             }
         } else {
@@ -212,215 +196,108 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    private void disconnectClient() {
-        Log.i(TAG, "Disconnecting client");
-        if (mClient != null) mClient.disconnect();
-    }
-
-    private void buildFitnessClient() {
-        Log.i(TAG, "buildFitnessClient");
-        if (mClient == null) {
-            mClient = new GoogleApiClient.Builder(this)
-                    .addApiIfAvailable(Fitness.RECORDING_API)
-                    .addApiIfAvailable(Fitness.SESSIONS_API)
-                    .addApiIfAvailable(Fitness.HISTORY_API)
-                    .addConnectionCallbacks(onConnection())
-                    .enableAutoManage(this, 0, onConnectionFailed())
-                    .build();
-        }
-    }
-
-    @NonNull
-    private OnConnectionFailedListener onConnectionFailed() {
-        return new OnConnectionFailedListener() {
-            @Override
-            public void onConnectionFailed(ConnectionResult result) {
-                if (!authInProgress) {
-                    try {
-                        authInProgress = true;
-                        result.startResolutionForResult(MainActivity.this, REQUEST_OAUTH);
-                    } catch (IntentSender.SendIntentException e) {
-
-                    }
-                } else {
-                    Log.e("GoogleFit", "authInProgress");
-                }
-            }
-        };
-    }
-
-    @NonNull
-    private ConnectionCallbacks onConnection() {
-        return new ConnectionCallbacks() {
-            @Override
-            public void onConnected(Bundle bundle) {
-                Log.i(TAG, "Client connected");
-                subscribe();
-            }
-
-            @Override
-            public void onConnectionSuspended(int i) {
-                if (i == CAUSE_NETWORK_LOST) {
-                    Log.i(TAG, "Client connection lost.  Cause: Network Lost.");
-                } else if (i == CAUSE_SERVICE_DISCONNECTED) {
-                    Log.i(TAG, "Client connection lost.  Reason: Service Disconnected");
-                }
-            }
-        };
-    }
-
     private void subscribe() {
-
-        if (mClient != null) {
-            Fitness.RecordingApi.listSubscriptions(mClient, TYPE_DISTANCE_DELTA)
-                    .setResultCallback(new ResultCallback<ListSubscriptionsResult>() {
-                        @Override
-                        public void onResult(ListSubscriptionsResult listSubscriptionsResult) {
-                            if (listSubscriptionsResult.getSubscriptions().isEmpty()) {
-                                _subscribe();
-                            }
-                        }
-                    });
-        }
-    }
-
-    public void _subscribe() {
-
-        if (mClient != null && mClient.isConnected()) {
-            Fitness.RecordingApi.subscribe(mClient, TYPE_DISTANCE_DELTA)
-                    .setResultCallback(new ResultCallback<Status>() {
-                        @Override
-                        public void onResult(Status status) {
-                            if (status.isSuccess()) {
-                                if (status.getStatusCode() == SUCCESS_ALREADY_SUBSCRIBED) {
-                                    Log.i(TAG, "Existing subscription for activity detected.");
-                                } else {
-                                    Log.i(TAG, "Successfully subscribed!");
-                                    refreshHistoricalData();
-                                }
-                            } else {
-                                Log.i(TAG, "There was a problem subscribing.");
-                            }
-                        }
-                    });
-        }
+        frh.subscribeIfNotExistingSubscription(TYPE_DISTANCE_DELTA).subscribe();
     }
 
     private void unsubscribe() {
-
-        if (mClient != null && mClient.isConnected()) {
-            Fitness.RecordingApi.unsubscribe(mClient, TYPE_DISTANCE_DELTA)
-                    .setResultCallback(new ResultCallback<Status>() {
-                        @Override
-                        public void onResult(Status status) {
-                            if (status.isSuccess()) {
-                                Log.i(TAG, "Successfully unsubscribed!");
-                            } else {
-                                Log.i(TAG, "There was a problem unsubscribing.");
-                            }
-                        }
-                    });
-        }
+        frh.unsubscribe(TYPE_DISTANCE_DELTA).subscribe();
     }
 
     private void startSession() {
-
-        if (mClient != null && mClient.isConnected() && session == null) {
-            String selectedActivity = dropDownListActivityType.getSelectedItem().toString();
-            Date currTime = new Date();
-            SimpleDateFormat df = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss");
-            String sessionName = selectedActivity + "-" + df.format(currTime);
-
-            session = new Session.Builder()
-                    .setName(sessionName)
-                    .setIdentifier(UUID.randomUUID().toString())
-                    .setDescription("Session of " + selectedActivity)
-                    .setStartTime(currTime.getTime(), MILLISECONDS)
-                    .setActivity(selectedActivity)
-                    .build();
-
-            Fitness.SessionsApi.startSession(mClient, session).setResultCallback(new ResultCallback<Status>() {
-                @Override
-                public void onResult(@NonNull Status status) {
-                    if (status.isSuccess()) {
-                        Log.i(TAG, "Successfully started session " + session.getIdentifier());
-                    } else {
-                        Log.i(TAG, "There was a problem starting session.");
-                    }
-                }
-            });
+        if (fcm.getClient() != null && fcm.getClient().isConnected() && session == null) {
+            session = buildSession();
+            fsh.startSession(session).subscribe();
         }
+    }
+
+    private Session buildSession() {
+        String selectedActivity = dropDownListActivityType.getSelectedItem().toString();
+        Date currTime = new Date();
+        SimpleDateFormat df = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss");
+        String sessionName = selectedActivity + "-" + df.format(currTime);
+
+        return new Session.Builder()
+                .setName(sessionName)
+                .setIdentifier(UUID.randomUUID().toString())
+                .setDescription("Session of " + selectedActivity)
+                .setStartTime(currTime.getTime(), MILLISECONDS)
+                .setActivity(selectedActivity)
+                .build();
     }
 
     private void stopSession() {
 
-        if (mClient != null && mClient.isConnected() && session != null && session.isOngoing()) {
-            Fitness.SessionsApi.stopSession(mClient, session.getIdentifier()).setResultCallback(new ResultCallback<SessionStopResult>() {
-                @Override
-                public void onResult(@NonNull SessionStopResult sessionStopResult) {
-                    if (sessionStopResult.getStatus().isSuccess()) {
-                        Log.i(TAG, "Successfully stopped session " + session.getIdentifier());
-                        notifySessionStopped(sessionStopResult);
-                        MainActivity.this.session = null;
-                    } else {
-                        Log.i(TAG, "There was a problem stopping session.");
-                    }
-                }
-            });
+        if (session != null && session.isOngoing()) {
+
+            fsh.stopSession(session.getIdentifier())
+                    .firstOrDefault(null)
+                    .map(new Func1<Session, Void>() {
+                        @Override
+                        public Void call(Session session) {
+                            if (session != null) {
+                                notifySessionStopped(session);
+                            }
+                            return null;
+                        }
+                    })
+                    .subscribe();
         }
     }
 
-    private void notifySessionStopped(@NonNull SessionStopResult sessionStopResult) {
-        if (!sessionStopResult.getSessions().isEmpty()) {
-            Session session = sessionStopResult.getSessions().get(0);
-            String toastMsg = "Session stopped." +
-                    "\nIt started at " + formatTime(session.getStartTime(MILLISECONDS)) +
-                    "\nIt ended at " + formatTime(session.getEndTime(MILLISECONDS));
-            Toast.makeText(MainActivity.this, toastMsg, Toast.LENGTH_LONG).show();
-        }
+    private void notifySessionStopped(Session session) {
+        String toastMsg = "Session stopped." +
+                "\nIt started at " + formatTime(session.getStartTime(MILLISECONDS)) +
+                "\nIt ended at " + formatTime(session.getEndTime(MILLISECONDS));
+        Toast.makeText(MainActivity.this, toastMsg, Toast.LENGTH_LONG).show();
     }
 
     private void refreshHistoricalData() {
 
-        if (mClient != null && mClient.isConnected() && barChart != null) {
+        DataReadRequest readRequest = buildDataReadRequest();
 
-            Calendar cal = Calendar.getInstance();
-            Date now = new Date();
-            cal.setTime(now);
-            long endTime = cal.getTimeInMillis();
-            cal.add(Calendar.WEEK_OF_YEAR, -2);
-            long startTime = cal.getTimeInMillis();
+        fhh.readData(readRequest)
+                .map(new Func1<DataReadResult, Void>() {
+                    @Override
+                    public Void call(DataReadResult dataReadResult) {
+                        List<DistanceAggregate> distanceAggregateData = extractData(dataReadResult);
+                        updateBarChart(distanceAggregateData);
+                        createTable(distanceAggregateData);
+                        return null;
+                    }
+                })
+                .subscribe();
+    }
 
-            DataReadRequest readRequest = new DataReadRequest.Builder()
-                    .aggregate(TYPE_DISTANCE_DELTA, AGGREGATE_DISTANCE_DELTA)
-                    .bucketByTime(1, DAYS)
-                    .setTimeRange(startTime, endTime, MILLISECONDS)
-                    .build();
+    private DataReadRequest buildDataReadRequest() {
+        Calendar cal = Calendar.getInstance();
+        Date now = new Date();
+        cal.setTime(now);
+        long endTime = cal.getTimeInMillis();
+        cal.add(Calendar.WEEK_OF_YEAR, -2);
+        long startTime = cal.getTimeInMillis();
 
-            Fitness.HistoryApi.readData(mClient, readRequest).setResultCallback(new ResultCallback<DataReadResult>() {
-                @Override
-                public void onResult(@NonNull DataReadResult dataReadResult) {
-                    List<DistanceAggregate> distanceAggregateData = extractData(dataReadResult);
-                    updateBarChart(distanceAggregateData);
-                    createTable(distanceAggregateData);
-                }
-            });
-        }
+        return new DataReadRequest.Builder()
+                .aggregate(TYPE_DISTANCE_DELTA, AGGREGATE_DISTANCE_DELTA)
+                .bucketByTime(1, DAYS)
+                .setTimeRange(startTime, endTime, MILLISECONDS)
+                .build();
     }
 
     private void createTable(List<DistanceAggregate> data) {
 
+        table.removeAllViews();
         for (DistanceAggregate dataItem : data) {
             TableRow tr = new TableRow(this);
             tr.setPadding(0, 10, 0, 0);
             TextView c1 = new TextView(this);
-            c1.setPadding(0,0,20,0);
+            c1.setPadding(0, 0, 20, 0);
             c1.setText(formatTime(dataItem.getStartDate().getTime()));
             TextView c2 = new TextView(this);
-            c2.setPadding(0,0,20,0);
+            c2.setPadding(0, 0, 20, 0);
             c2.setText(formatTime(dataItem.getEndDate().getTime()));
             TextView c3 = new TextView(this);
-            c3.setPadding(0,0,20,0);
+            c3.setPadding(0, 0, 20, 0);
             c3.setText(String.valueOf(dataItem.getDistanceInMeters()));
             tr.addView(c1);
             tr.addView(c2);
@@ -449,6 +326,9 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void updateBarChart(List<DistanceAggregate> data) {
+
+        if (barChart == null) return;
+
         barChart.invalidate();
 
         List<String> xValues = new ArrayList<>();
@@ -465,48 +345,34 @@ public class MainActivity extends AppCompatActivity {
         barChart.notifyDataSetChanged();
     }
 
-    private String formatTime(long timeMillis) {
-        SimpleDateFormat df = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss");
-        return df.format(new Date(timeMillis));
-    }
-
+    /**
+     * Permissions handling
+     */
     private boolean isPermissionGranted() {
-        int permissionState1 = ActivityCompat.checkSelfPermission(this, ACCESS_FINE_LOCATION);
-        return permissionState1 == PackageManager.PERMISSION_GRANTED;
+        int permissionState = ActivityCompat.checkSelfPermission(this, ACCESS_FINE_LOCATION);
+        return permissionState == PackageManager.PERMISSION_GRANTED;
     }
 
     private void requestPermissions() {
-        boolean shouldProvideRationale =
-                ActivityCompat.shouldShowRequestPermissionRationale(this, ACCESS_FINE_LOCATION);
+        boolean shouldProvideRationale = ActivityCompat.shouldShowRequestPermissionRationale(this, ACCESS_FINE_LOCATION);
 
-        // Provide an additional rationale to the user. This would happen if the user denied the
-        // request previously, but didn't check the "Don't ask again" checkbox.
         if (shouldProvideRationale) {
             Log.i(TAG, "Displaying permission rationale to provide additional context.");
-            Snackbar.make(
-                    findViewById(R.id.main_activity_view),
-                    R.string.permission_rationale,
-                    Snackbar.LENGTH_INDEFINITE)
-                    .setAction(R.string.ok, new View.OnClickListener() {
-                        @Override
-                        public void onClick(View view) {
-                            requestPermissionForLocation();
-                        }
-                    })
-                    .show();
+            showSnackBar(R.string.permission_rationale, R.string.ok, new View.OnClickListener() {
+                @Override
+                public void onClick(View view) {
+                    requestPermissionForLocation();
+                }
+            });
         } else {
             Log.i(TAG, "Requesting permission");
-            // Request permission. It's possible this can be auto answered if device policy
-            // sets the permission in a given state or the user denied the permission
-            // previously and checked "Never ask again".
             requestPermissionForLocation();
         }
     }
 
     private void requestPermissionForLocation() {
         ActivityCompat.requestPermissions(MainActivity.this,
-                new String[]{ACCESS_FINE_LOCATION},
-                REQUEST_PERMISSIONS_REQUEST_CODE);
+                new String[]{ACCESS_FINE_LOCATION}, REQUEST_PERMISSIONS_REQUEST_CODE);
     }
 
     @Override
@@ -516,51 +382,40 @@ public class MainActivity extends AppCompatActivity {
         Log.i(TAG, "onRequestPermissionResult");
         if (requestCode == REQUEST_PERMISSIONS_REQUEST_CODE) {
             if (grantResults.length <= 0) {
-                // If user interaction was interrupted, the permission request is cancelled and you
-                // receive empty arrays.
                 Log.i(TAG, "User interaction was cancelled.");
             } else if (grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                // Permission was granted.
-                buildFitnessClient();
-                mClient.connect();
+                fcm.buildFitnessClient();
             } else {
                 displayPermissionDeniedExplanation();
             }
         }
     }
 
-    /**
-     * // Permission denied.
-     * <p/>
-     * // In this Activity we've chosen to notify the user that they
-     * // have rejected a core permission for the app since it makes the Activity useless.
-     * // We're communicating this message in a Snackbar since this is a sample app, but
-     * // core permissions would typically be best requested during a welcome-screen flow.
-     * <p/>
-     * // Additionally, it is important to remember that a permission might have been
-     * // rejected without asking the user for permission (device policy or "Never ask
-     * // again" prompts). Therefore, a user interface affordance is typically implemented
-     * // when permissions are denied. Otherwise, your app could appear unresponsive to
-     * // touches or interactions which have required permissions.
-     */
     private void displayPermissionDeniedExplanation() {
+        showSnackBar(R.string.permission_denied_explanation, R.string.settings, new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                Intent intent = new Intent();
+                intent.setAction(Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
+                Uri uri = Uri.fromParts("package", BuildConfig.APPLICATION_ID, null);
+                intent.setData(uri);
+                intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                startActivity(intent);
+            }
+        });
+    }
 
+    private void showSnackBar(int message, int actionLabel, View.OnClickListener onClickListener) {
         Snackbar.make(
                 findViewById(R.id.main_activity_view),
-                R.string.permission_denied_explanation,
+                message,
                 Snackbar.LENGTH_INDEFINITE)
-                .setAction(R.string.settings, new View.OnClickListener() {
-                    @Override
-                    public void onClick(View view) {
-                        // Build intent that displays the App settings screen.
-                        Intent intent = new Intent();
-                        intent.setAction(Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
-                        Uri uri = Uri.fromParts("package", BuildConfig.APPLICATION_ID, null);
-                        intent.setData(uri);
-                        intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                        startActivity(intent);
-                    }
-                })
+                .setAction(actionLabel, onClickListener)
                 .show();
+    }
+
+    private String formatTime(long timeMillis) {
+        SimpleDateFormat df = new SimpleDateFormat(DATE_FORMAT_PATTERN_DEFAULT);
+        return df.format(new Date(timeMillis));
     }
 }
