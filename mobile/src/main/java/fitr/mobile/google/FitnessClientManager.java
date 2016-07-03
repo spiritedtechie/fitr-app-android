@@ -23,7 +23,7 @@ public class FitnessClientManager {
         this.activity = activity;
     }
 
-    public GoogleApiClient buildFitnessClient() {
+    private GoogleApiClient buildFitnessClient() {
         Log.i(TAG, "buildFitnessClient");
 
         final GoogleApiClient.ConnectionCallbacks connectionHandler = new GoogleApiClient.ConnectionCallbacks() {
@@ -70,6 +70,11 @@ public class FitnessClientManager {
     }
 
     public GoogleApiClient getClient() {
+
+        if (client == null) {
+            this.buildFitnessClient();
+        }
+
         return client;
     }
 }

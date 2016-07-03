@@ -78,11 +78,11 @@ public class MainActivity extends AppCompatActivity {
     private BarChart barChart;
     private TableLayout table;
 
+    // Fitness API helpers
     private FitnessClientManager fcm;
     private FitnessRecordingHelper frh;
     private FitnessSessionHelper fsh;
     private FitnessHistoryHelper fhh;
-
 
     private Session session;
 
@@ -119,7 +119,7 @@ public class MainActivity extends AppCompatActivity {
         if (!isPermissionGranted()) {
             requestPermissions();
         } else {
-            fcm.buildFitnessClient();
+            fcm.getClient();
             fcm.connect();
         }
 
@@ -153,17 +153,6 @@ public class MainActivity extends AppCompatActivity {
         });
     }
 
-
-    @Override
-    protected void onResume() {
-        super.onResume();
-    }
-
-    @Override
-    protected void onDestroy() {
-        super.onDestroy();
-    }
-
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
         getMenuInflater().inflate(R.menu.main, menu);
@@ -186,10 +175,8 @@ public class MainActivity extends AppCompatActivity {
         if (requestCode == REQUEST_OAUTH) {
             Log.i(TAG, "onActivityResult: REQUEST_OAUTH");
             if (resultCode == Activity.RESULT_OK) {
-                if (fcm.getClient() != null && !fcm.getClient().isConnecting() && !fcm.getClient().isConnected()) {
-                    Log.i(TAG, "onActivityResult: client.connect()");
-                    fcm.connect();
-                }
+                Log.i(TAG, "onActivityResult: client.connect()");
+                fcm.connect();
             }
         } else {
             Log.i(TAG, "onActivityResult: request code: " + requestCode);
@@ -205,7 +192,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void startSession() {
-        if (fcm.getClient() != null && fcm.getClient().isConnected() && session == null) {
+        if (session == null) {
             session = buildSession();
             fsh.startSession(session).subscribe();
         }
@@ -261,8 +248,8 @@ public class MainActivity extends AppCompatActivity {
                     @Override
                     public Void call(DataReadResult dataReadResult) {
                         List<DistanceAggregate> distanceAggregateData = extractData(dataReadResult);
-                        updateBarChart(distanceAggregateData);
-                        createTable(distanceAggregateData);
+                        refreshDistanceBarChart(distanceAggregateData);
+                        showTableContent(distanceAggregateData);
                         return null;
                     }
                 })
@@ -284,7 +271,7 @@ public class MainActivity extends AppCompatActivity {
                 .build();
     }
 
-    private void createTable(List<DistanceAggregate> data) {
+    private void showTableContent(List<DistanceAggregate> data) {
 
         table.removeAllViews();
         for (DistanceAggregate dataItem : data) {
@@ -325,7 +312,7 @@ public class MainActivity extends AppCompatActivity {
         return distanceAggregateData;
     }
 
-    private void updateBarChart(List<DistanceAggregate> data) {
+    private void refreshDistanceBarChart(List<DistanceAggregate> data) {
 
         if (barChart == null) return;
 
@@ -384,7 +371,8 @@ public class MainActivity extends AppCompatActivity {
             if (grantResults.length <= 0) {
                 Log.i(TAG, "User interaction was cancelled.");
             } else if (grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                fcm.buildFitnessClient();
+                fcm.getClient();
+                fcm.connect();
             } else {
                 displayPermissionDeniedExplanation();
             }
