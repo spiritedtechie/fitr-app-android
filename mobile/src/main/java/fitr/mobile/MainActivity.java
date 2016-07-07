@@ -9,6 +9,7 @@ import android.provider.Settings;
 import android.support.annotation.NonNull;
 import android.support.design.widget.Snackbar;
 import android.support.v4.app.ActivityCompat;
+import android.support.v4.widget.SwipeRefreshLayout;
 import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
 import android.view.Menu;
@@ -51,6 +52,7 @@ import fitr.mobile.google.FitnessRecordingHelperImpl;
 import fitr.mobile.google.FitnessSessionHelper;
 import fitr.mobile.google.FitnessSessionHelperImpl;
 import fitr.mobile.models.AggregatedDistance;
+import rx.Observable;
 import rx.functions.Func1;
 
 import static android.Manifest.permission.ACCESS_FINE_LOCATION;
@@ -75,9 +77,9 @@ public class MainActivity extends AppCompatActivity {
     private Spinner dropDownListActivityType;
     private Button btnStart;
     private Button btnStop;
-    private Button btnRefresh;
     private BarChart barChart;
     private TableLayout table;
+    private SwipeRefreshLayout swipeLayout;
 
     // Fitness API helpers
     private FitnessClientManager fcm;
@@ -99,9 +101,32 @@ public class MainActivity extends AppCompatActivity {
         dropDownListActivityType = (Spinner) findViewById(R.id.ddl_activity_type);
         btnStart = (Button) findViewById(R.id.btn_start);
         btnStop = (Button) findViewById(R.id.btn_stop);
-        btnRefresh = (Button) findViewById(R.id.btn_refresh_chart);
         barChart = (BarChart) findViewById(R.id.chart);
         table = (TableLayout) findViewById(R.id.table);
+        swipeLayout = (SwipeRefreshLayout) findViewById(R.id.swipe_container);
+        swipeLayout.setOnRefreshListener(new SwipeRefreshLayout.OnRefreshListener() {
+            @Override
+            public void onRefresh() {
+                swipeLayout.setRefreshing(true);
+                refreshHistoricalData()
+                        .map(new Func1() {
+                            @Override
+                            public Object call(Object o) {
+                                swipeLayout.setRefreshing(false);
+                                return null;
+                            }
+                        })
+                        .onErrorReturn(new Func1<Throwable, Void>() {
+                            @Override
+                            public Void call(Throwable throwable) {
+                                swipeLayout.setRefreshing(false);
+                                loggingErrorHandler().call(throwable);
+                                return null;
+                            }
+                        })
+                        .subscribe();
+            }
+        });
 
         // Set up drop down list for activities
         ArrayAdapter<String> adapter = new ArrayAdapter<>(this, android.R.layout.simple_spinner_item, buildActivitiesList());
@@ -138,13 +163,6 @@ public class MainActivity extends AppCompatActivity {
             public void onClick(View v) {
                 stopSession();
                 unsubscribe();
-            }
-        });
-
-        btnRefresh.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                refreshHistoricalData();
             }
         });
     }
@@ -191,11 +209,10 @@ public class MainActivity extends AppCompatActivity {
 
     private void connectClient() {
         fcm.connect()
-                .map(new Func1() {
+                .flatMap(new Func1<Void, Observable>() {
                     @Override
-                    public Object call(Object o) {
-                        refreshHistoricalData();
-                        return null;
+                    public Observable call(Void aVoid) {
+                        return refreshHistoricalData();
                     }
                 })
                 .onErrorReturn(loggingErrorHandler())
@@ -264,7 +281,7 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    private void refreshHistoricalData() {
+    private Observable refreshHistoricalData() {
         Func1<DataReadResult, Void> action = new Func1<DataReadResult, Void>() {
             @Override
             public Void call(DataReadResult dataReadResult) {
@@ -275,10 +292,9 @@ public class MainActivity extends AppCompatActivity {
             }
         };
 
-        fhh.readData(buildDataReadRequest())
+        return fhh.readData(buildDataReadRequest())
                 .map(action)
-                .onErrorReturn(loggingErrorHandler())
-                .subscribe();
+                .onErrorReturn(loggingErrorHandler());
     }
 
     private DataReadRequest buildDataReadRequest() {

@@ -46,38 +46,36 @@
             android:text="Stop" />
     </LinearLayout>
 
-    <Button
-        android:id="@+id/btn_refresh_chart"
+    <android.support.v4.widget.SwipeRefreshLayout xmlns:android="http://schemas.android.com/apk/res/android"
+        android:id="@+id/swipe_container"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_below="@+id/btns_sessions"
-        android:layout_marginTop="20sp"
-        android:text="Refresh Chart" />
+        android:layout_below="@+id/btns_sessions">
 
-
-    <ScrollView
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:layout_below="@+id/btn_refresh_chart"
-        android:fillViewport="true">
-
-        <RelativeLayout
+        <ScrollView
             android:layout_width="match_parent"
-            android:layout_height="match_parent">
+            android:layout_height="match_parent"
+            android:fillViewport="true">
 
-            <com.github.mikephil.charting.charts.BarChart
-                android:id="@+id/chart"
+            <RelativeLayout
                 android:layout_width="match_parent"
-                android:layout_height="300sp"
-                android:layout_marginTop="20sp" />
+                android:layout_height="match_parent">
 
-            <TableLayout
-                android:id="@+id/table"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="10sp"
-                android:layout_below="@+id/chart"/>
-        </RelativeLayout>
+                <com.github.mikephil.charting.charts.BarChart
+                    android:id="@+id/chart"
+                    android:layout_width="match_parent"
+                    android:layout_height="300sp"
+                    android:layout_marginTop="20sp" />
 
-    </ScrollView>
+                <TableLayout
+                    android:id="@+id/table"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_below="@+id/chart"
+                    android:layout_marginTop="10sp" />
+            </RelativeLayout>
+        </ScrollView>
+
+    </android.support.v4.widget.SwipeRefreshLayout>
+
 </RelativeLayout>
