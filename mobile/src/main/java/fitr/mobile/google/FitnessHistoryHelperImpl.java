@@ -14,7 +14,7 @@ import rx.Subscriber;
 
 public class FitnessHistoryHelperImpl implements FitnessHistoryHelper {
 
-    public GoogleApiClient client;
+    private GoogleApiClient client;
 
     public FitnessHistoryHelperImpl(GoogleApiClient client) {
         this.client = client;
@@ -22,35 +22,30 @@ public class FitnessHistoryHelperImpl implements FitnessHistoryHelper {
 
     @Override
     public Observable<DataReadResult> readData(final DataReadRequest request) {
-
         return Observable.create(new Observable.OnSubscribe<DataReadResult>() {
 
             @Override
             public void call(final Subscriber<? super DataReadResult> subscriber) {
 
-                try {
-                    Fitness.HistoryApi.readData(client, request).setResultCallback(new ResultCallback<DataReadResult>() {
-                        @Override
-                        public void onResult(@NonNull DataReadResult dataReadResult) {
-                            if (subscriber.isUnsubscribed()) return;
-                            if (dataReadResult.getStatus().isSuccess()) {
-                                Log.i(TAG, "Successfully read data!");
-                                subscriber.onNext(dataReadResult);
-                                if (!subscriber.isUnsubscribed()) {
-                                    subscriber.onCompleted();
-                                }
-                            } else {
-                                Log.i(TAG, "There was a problem reading data.");
-                                subscriber.onError(new IllegalStateException("Problem reading data: " + dataReadResult.getStatus().toString()));
-                            }
-
-                        }
-                    });
-                } catch (Exception e) {
-                    subscriber.onError(e);
+                if (client == null || !client.isConnected()) {
+                    subscriber.onError(new IllegalStateException("Client is not available or not connected"));
+                    return;
                 }
+                Fitness.HistoryApi.readData(client, request).setResultCallback(new ResultCallback<DataReadResult>() {
+                    @Override
+                    public void onResult(@NonNull DataReadResult dataReadResult) {
+                        if (subscriber.isUnsubscribed()) return;
+                        if (dataReadResult.getStatus().isSuccess()) {
+                            Log.i(TAG, "Successfully read data!");
+                            subscriber.onNext(dataReadResult);
+                            subscriber.onCompleted();
+                        } else {
+                            Log.i(TAG, "There was a problem reading data.");
+                            subscriber.onError(new IllegalStateException("Problem reading data: " + dataReadResult.getStatus().toString()));
+                        }
+                    }
+                });
             }
         });
-
     }
 }

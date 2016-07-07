@@ -50,6 +50,7 @@ import fitr.mobile.google.FitnessRecordingHelper;
 import fitr.mobile.google.FitnessRecordingHelperImpl;
 import fitr.mobile.google.FitnessSessionHelper;
 import fitr.mobile.google.FitnessSessionHelperImpl;
+import fitr.mobile.models.AggregatedDistance;
 import rx.functions.Func1;
 
 import static android.Manifest.permission.ACCESS_FINE_LOCATION;
@@ -60,7 +61,7 @@ import static java.util.concurrent.TimeUnit.MILLISECONDS;
 
 public class MainActivity extends AppCompatActivity {
 
-    public static final String TAG = "SensorActivity";
+    public static final String TAG = "MainActivity";
 
     private static final String AUTH_PENDING = "auth_state_pending";
 
@@ -103,11 +104,7 @@ public class MainActivity extends AppCompatActivity {
         table = (TableLayout) findViewById(R.id.table);
 
         // Set up drop down list for activities
-        List<String> activities = new ArrayList<>();
-        activities.add(FitnessActivities.RUNNING);
-        activities.add(FitnessActivities.WALKING);
-        activities.add(FitnessActivities.BIKING);
-        ArrayAdapter<String> adapter = new ArrayAdapter<>(this, android.R.layout.simple_spinner_item, activities);
+        ArrayAdapter<String> adapter = new ArrayAdapter<>(this, android.R.layout.simple_spinner_item, buildActivitiesList());
         adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
         dropDownListActivityType.setAdapter(adapter);
 
@@ -119,14 +116,13 @@ public class MainActivity extends AppCompatActivity {
         if (!isPermissionGranted()) {
             requestPermissions();
         } else {
-            fcm.getClient();
-            fcm.connect();
+            initialiseClient();
         }
 
-        frh = new FitnessRecordingHelperImpl(fcm.getClient());
-        fsh = new FitnessSessionHelperImpl(fcm.getClient());
-        fhh = new FitnessHistoryHelperImpl(fcm.getClient());
-
+        // Build Fitness API helpers
+        frh = new FitnessRecordingHelperImpl(fcm.createClient());
+        fsh = new FitnessSessionHelperImpl(fcm.createClient());
+        fhh = new FitnessHistoryHelperImpl(fcm.createClient());
 
         // Button listeners
         btnStart.setOnClickListener(new View.OnClickListener() {
@@ -154,6 +150,12 @@ public class MainActivity extends AppCompatActivity {
     }
 
     @Override
+    protected void onDestroy() {
+        fcm.disconnect();
+        super.onDestroy();
+    }
+
+    @Override
     public boolean onCreateOptionsMenu(Menu menu) {
         getMenuInflater().inflate(R.menu.main, menu);
         return true;
@@ -161,7 +163,6 @@ public class MainActivity extends AppCompatActivity {
 
     @Override
     public boolean onOptionsItemSelected(MenuItem item) {
-        int id = item.getItemId();
         return super.onOptionsItemSelected(item);
     }
 
@@ -176,33 +177,56 @@ public class MainActivity extends AppCompatActivity {
             Log.i(TAG, "onActivityResult: REQUEST_OAUTH");
             if (resultCode == Activity.RESULT_OK) {
                 Log.i(TAG, "onActivityResult: client.connect()");
-                fcm.connect();
+                connectClient();
             }
         } else {
             Log.i(TAG, "onActivityResult: request code: " + requestCode);
         }
     }
 
+    private void initialiseClient() {
+        fcm.createClient();
+        connectClient();
+    }
+
+    private void connectClient() {
+        fcm.connect()
+                .map(new Func1() {
+                    @Override
+                    public Object call(Object o) {
+                        refreshHistoricalData();
+                        return null;
+                    }
+                })
+                .onErrorReturn(loggingErrorHandler())
+                .subscribe();
+    }
+
     private void subscribe() {
-        frh.subscribeIfNotExistingSubscription(TYPE_DISTANCE_DELTA).subscribe();
+        frh.subscribeIfNotExistingSubscription(TYPE_DISTANCE_DELTA)
+                .onErrorReturn(loggingErrorHandler())
+                .subscribe();
     }
 
     private void unsubscribe() {
-        frh.unsubscribe(TYPE_DISTANCE_DELTA).subscribe();
+        frh.unsubscribe(TYPE_DISTANCE_DELTA)
+                .onErrorReturn(loggingErrorHandler())
+                .subscribe();
     }
 
     private void startSession() {
         if (session == null) {
             session = buildSession();
-            fsh.startSession(session).subscribe();
+            fsh.startSession(session)
+                    .onErrorReturn(loggingErrorHandler())
+                    .subscribe();
         }
     }
 
     private Session buildSession() {
         String selectedActivity = dropDownListActivityType.getSelectedItem().toString();
         Date currTime = new Date();
-        SimpleDateFormat df = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss");
-        String sessionName = selectedActivity + "-" + df.format(currTime);
+        String sessionName = selectedActivity + "-" + formatTime(currTime.getTime());
 
         return new Session.Builder()
                 .setName(sessionName)
@@ -214,45 +238,46 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void stopSession() {
-
-        if (session != null && session.isOngoing()) {
-
-            fsh.stopSession(session.getIdentifier())
-                    .firstOrDefault(null)
-                    .map(new Func1<Session, Void>() {
-                        @Override
-                        public Void call(Session session) {
-                            if (session != null) {
-                                notifySessionStopped(session);
-                            }
-                            return null;
-                        }
-                    })
-                    .subscribe();
+        if (session == null || !session.isOngoing()) {
+            return;
         }
-    }
 
-    private void notifySessionStopped(Session session) {
-        String toastMsg = "Session stopped." +
-                "\nIt started at " + formatTime(session.getStartTime(MILLISECONDS)) +
-                "\nIt ended at " + formatTime(session.getEndTime(MILLISECONDS));
-        Toast.makeText(MainActivity.this, toastMsg, Toast.LENGTH_LONG).show();
-    }
-
-    private void refreshHistoricalData() {
-
-        DataReadRequest readRequest = buildDataReadRequest();
-
-        fhh.readData(readRequest)
-                .map(new Func1<DataReadResult, Void>() {
+        fsh.stopSession(session.getIdentifier())
+                .firstOrDefault(null)
+                .map(new Func1<Session, Void>() {
                     @Override
-                    public Void call(DataReadResult dataReadResult) {
-                        List<DistanceAggregate> distanceAggregateData = extractData(dataReadResult);
-                        refreshDistanceBarChart(distanceAggregateData);
-                        showTableContent(distanceAggregateData);
+                    public Void call(Session session) {
+                        notifySessionStopped(session);
                         return null;
                     }
                 })
+                .onErrorReturn(loggingErrorHandler())
+                .subscribe();
+    }
+
+    private void notifySessionStopped(Session session) {
+        if (session != null) {
+            String toastMsg = "Session stopped." +
+                    "\nIt started at " + formatTime(session.getStartTime(MILLISECONDS)) +
+                    "\nIt ended at " + formatTime(session.getEndTime(MILLISECONDS));
+            Toast.makeText(MainActivity.this, toastMsg, Toast.LENGTH_LONG).show();
+        }
+    }
+
+    private void refreshHistoricalData() {
+        Func1<DataReadResult, Void> action = new Func1<DataReadResult, Void>() {
+            @Override
+            public Void call(DataReadResult dataReadResult) {
+                List<AggregatedDistance> data = extractData(dataReadResult);
+                refreshDistanceBarChart(data);
+                showTableContent(data);
+                return null;
+            }
+        };
+
+        fhh.readData(buildDataReadRequest())
+                .map(action)
+                .onErrorReturn(loggingErrorHandler())
                 .subscribe();
     }
 
@@ -271,10 +296,9 @@ public class MainActivity extends AppCompatActivity {
                 .build();
     }
 
-    private void showTableContent(List<DistanceAggregate> data) {
-
+    private void showTableContent(List<AggregatedDistance> data) {
         table.removeAllViews();
-        for (DistanceAggregate dataItem : data) {
+        for (AggregatedDistance dataItem : data) {
             TableRow tr = new TableRow(this);
             tr.setPadding(0, 10, 0, 0);
             TextView c1 = new TextView(this);
@@ -293,10 +317,8 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    @NonNull
-    private List<DistanceAggregate> extractData(@NonNull DataReadResult dataReadResult) {
-        List<DistanceAggregate> distanceAggregateData = new ArrayList<>();
-
+    private List<AggregatedDistance> extractData(DataReadResult dataReadResult) {
+        final List<AggregatedDistance> distanceAggregateData = new ArrayList<>();
         for (Bucket bucket : dataReadResult.getBuckets()) {
             DataSet dataSet = bucket.getDataSet(AGGREGATE_DISTANCE_DELTA);
             for (DataPoint dp : dataSet.getDataPoints()) {
@@ -306,14 +328,13 @@ public class MainActivity extends AppCompatActivity {
                 Date endDate = new Date(dp.getEndTime(MILLISECONDS));
                 float distance = value.asFloat();
 
-                distanceAggregateData.add(new DistanceAggregate(startDate, endDate, distance));
+                distanceAggregateData.add(new AggregatedDistance(startDate, endDate, distance));
             }
         }
         return distanceAggregateData;
     }
 
-    private void refreshDistanceBarChart(List<DistanceAggregate> data) {
-
+    private void refreshDistanceBarChart(List<AggregatedDistance> data) {
         if (barChart == null) return;
 
         barChart.invalidate();
@@ -364,15 +385,14 @@ public class MainActivity extends AppCompatActivity {
 
     @Override
     public void onRequestPermissionsResult(int requestCode,
-                                           @NonNull String[] permissions,
-                                           @NonNull int[] grantResults) {
+                                           String[] permissions,
+                                           int[] grantResults) {
         Log.i(TAG, "onRequestPermissionResult");
         if (requestCode == REQUEST_PERMISSIONS_REQUEST_CODE) {
             if (grantResults.length <= 0) {
                 Log.i(TAG, "User interaction was cancelled.");
             } else if (grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                fcm.getClient();
-                fcm.connect();
+                initialiseClient();
             } else {
                 displayPermissionDeniedExplanation();
             }
@@ -398,12 +418,29 @@ public class MainActivity extends AppCompatActivity {
                 findViewById(R.id.main_activity_view),
                 message,
                 Snackbar.LENGTH_INDEFINITE)
-                .setAction(actionLabel, onClickListener)
-                .show();
+                .setAction(actionLabel, onClickListener).show();
     }
 
     private String formatTime(long timeMillis) {
         SimpleDateFormat df = new SimpleDateFormat(DATE_FORMAT_PATTERN_DEFAULT);
         return df.format(new Date(timeMillis));
+    }
+
+    private List<String> buildActivitiesList() {
+        List<String> activities = new ArrayList<>();
+        activities.add(FitnessActivities.RUNNING);
+        activities.add(FitnessActivities.WALKING);
+        activities.add(FitnessActivities.BIKING);
+        return activities;
+    }
+
+    private Func1<Throwable, Void> loggingErrorHandler() {
+        return new Func1<Throwable, Void>() {
+            @Override
+            public Void call(Throwable t) {
+                Log.e(TAG, t.getMessage(), t);
+                return null;
+            }
+        };
     }
 }
