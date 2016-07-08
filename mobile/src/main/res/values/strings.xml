@@ -10,4 +10,14 @@
     <string name="settings">Settings</string>
     <string name="ok">OK</string>
 
+    <string name="drawer_open">Open navigation drawer</string>
+    <string name="drawer_close">Close navigation drawer</string>
+
+    <string name="drawer_header">Header</string>
+    <string name="drawer_item_workout">Workout</string>
+    <string name="drawer_item_distance">Distance</string>
+
+    <string name="activity_record_start">Start</string>
+    <string name="activity_record_stop">Stop</string>
+
 </resources>

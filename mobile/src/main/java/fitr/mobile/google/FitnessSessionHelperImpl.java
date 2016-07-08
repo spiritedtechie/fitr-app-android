@@ -40,7 +40,7 @@ public class FitnessSessionHelperImpl implements FitnessSessionHelper {
 
                 Fitness.SessionsApi.startSession(client, session).setResultCallback(new ResultCallback<Status>() {
                     @Override
-                    public void onResult(Status status) {
+                    public void onResult(@NonNull Status status) {
                         if (subscriber.isUnsubscribed()) return;
                         if (status.isSuccess()) {
                             Log.i(TAG, "Successfully started session " + session.getIdentifier());

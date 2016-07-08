@@ -1,5 +1,6 @@
 package fitr.mobile.google;
 
+import android.support.annotation.NonNull;
 import android.util.Log;
 
 import com.google.android.gms.common.api.GoogleApiClient;
@@ -27,11 +28,11 @@ public class FitnessRecordingHelperImpl implements FitnessRecordingHelper {
     }
 
     @Override
-    public Observable subscribeIfNotExistingSubscription(final DataType dataType) {
+    public Observable<Void> subscribeIfNotExistingSubscription(final DataType dataType) {
         return subscriptionExists(dataType)
-                .flatMap(new Func1<Boolean, Observable<?>>() {
+                .flatMap(new Func1<Boolean, Observable<Void>>() {
                     @Override
-                    public Observable<?> call(Boolean isTrue) {
+                    public Observable<Void> call(Boolean isTrue) {
                         if (isTrue) {
                             Log.i(TAG, "Existing subscriptions found, so not subscribing");
                             return Observable.empty();
@@ -74,7 +75,7 @@ public class FitnessRecordingHelperImpl implements FitnessRecordingHelper {
                 }
                 Fitness.RecordingApi.listSubscriptions(client).setResultCallback(new ResultCallback<ListSubscriptionsResult>() {
                     @Override
-                    public void onResult(ListSubscriptionsResult listSubscriptionsResult) {
+                    public void onResult(@NonNull ListSubscriptionsResult listSubscriptionsResult) {
                         if (subscriber.isUnsubscribed()) return;
                         if (listSubscriptionsResult.getStatus().isSuccess()) {
                             Log.i(TAG, "Subscriptions retrieved.");
@@ -105,7 +106,7 @@ public class FitnessRecordingHelperImpl implements FitnessRecordingHelper {
                 }
                 Fitness.RecordingApi.subscribe(client, dataType).setResultCallback(new ResultCallback<Status>() {
                     @Override
-                    public void onResult(Status status) {
+                    public void onResult(@NonNull Status status) {
                         if (subscriber.isUnsubscribed()) return;
                         if (status.isSuccess()) {
                             if (status.getStatusCode() == SUCCESS_ALREADY_SUBSCRIBED) {
@@ -137,7 +138,7 @@ public class FitnessRecordingHelperImpl implements FitnessRecordingHelper {
                 }
                 Fitness.RecordingApi.unsubscribe(client, dataType).setResultCallback(new ResultCallback<Status>() {
                     @Override
-                    public void onResult(Status status) {
+                    public void onResult(@NonNull Status status) {
                         if (subscriber.isUnsubscribed()) return;
                         if (status.isSuccess()) {
                             Log.i(TAG, "Successfully unsubscribed!");

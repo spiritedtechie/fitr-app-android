@@ -1,8 +1,10 @@
 package fitr.mobile.google;
 
 import android.app.Activity;
+import android.content.Context;
 import android.content.IntentSender;
 import android.os.Bundle;
+import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
 import android.util.Log;
 
@@ -19,29 +21,29 @@ import static com.google.android.gms.common.api.GoogleApiClient.OnConnectionFail
 
 public class FitnessClientManager {
 
-    public static final String TAG = "FitnessClientManager";
+    private static final String TAG = "FitnessClientManager";
 
     private static final int REQUEST_OAUTH = 1;
 
-    private Activity activity;
+    private Context context;
     private GoogleApiClient client;
 
-    public FitnessClientManager(Activity activity) {
-        this.activity = activity;
+    public FitnessClientManager(Context context) {
+        this.context = context;
         buildFitnessClient();
     }
 
     private void buildFitnessClient() {
         Log.i(TAG, "buildFitnessClient");
 
-        client = new Builder(this.activity)
+        client = new Builder(this.context)
                 .addApiIfAvailable(Fitness.RECORDING_API)
                 .addApiIfAvailable(Fitness.SESSIONS_API)
                 .addApiIfAvailable(Fitness.HISTORY_API)
                 .build();
     }
 
-    public Observable connect() {
+    public Observable connect(final Activity activity) {
         Log.i(TAG, "connect");
 
         return Observable.create(new Observable.OnSubscribe<Void>() {
@@ -69,17 +71,21 @@ public class FitnessClientManager {
 
                     client.registerConnectionFailedListener(new OnConnectionFailedListener() {
                         @Override
-                        public void onConnectionFailed(ConnectionResult result) {
+                        public void onConnectionFailed(@NonNull ConnectionResult result) {
                             Log.i(TAG, "Connection failed");
                             subscriber.onError(new IllegalStateException("Connection failed"));
                             try {
-                                result.startResolutionForResult(FitnessClientManager.this.activity, REQUEST_OAUTH);
+                                result.startResolutionForResult(activity, REQUEST_OAUTH);
                             } catch (IntentSender.SendIntentException e) {
                             }
                         }
                     });
 
                     client.connect();
+                } else {
+                    // Already connected/connecting
+                    subscriber.onNext(null);
+                    subscriber.onCompleted();
                 }
             }
         });
@@ -93,7 +99,7 @@ public class FitnessClientManager {
         }
     }
 
-    public GoogleApiClient createClient() {
+    public GoogleApiClient getClient() {
         if (client == null) {
             this.buildFitnessClient();
         }
