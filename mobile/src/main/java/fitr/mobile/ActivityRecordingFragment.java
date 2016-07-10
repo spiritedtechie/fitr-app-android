@@ -2,7 +2,6 @@ package fitr.mobile;
 
 import android.os.Bundle;
 import android.support.v4.app.Fragment;
-import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -18,30 +17,27 @@ import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
-import java.util.UUID;
 
 import javax.inject.Inject;
 
-import fitr.mobile.google.FitnessRecordingHelper;
-import fitr.mobile.google.FitnessSessionHelper;
-import rx.functions.Func1;
+import fitr.mobile.presenters.ActivityRecordingPresenter;
+import fitr.mobile.views.ActivityRecordingView;
 
-import static com.google.android.gms.fitness.data.DataType.TYPE_DISTANCE_DELTA;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 
-public class ActivityRecordingFragment extends Fragment {
+public class ActivityRecordingFragment extends Fragment implements
+        ActivityRecordingView {
 
     private static final String TAG = "ActivityRecording";
 
     private static final String DATE_FORMAT_PATTERN_DEFAULT = "yyyy-MM-dd'T'HH:mm:ss";
 
-    private Spinner dropDownListActivityType;
+    @Inject
+    ActivityRecordingPresenter presenter;
 
-    @Inject
-    FitnessRecordingHelper frh;
-    @Inject
-    FitnessSessionHelper fsh;
-    private Session session;
+    private Button btnStart;
+    private Button btnStop;
+    private Spinner dropDownListActivityType;
 
     @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
@@ -51,25 +47,27 @@ public class ActivityRecordingFragment extends Fragment {
         View view = inflater.inflate(R.layout.fragment_fitness_activity, container, false);
 
         dropDownListActivityType = (Spinner) view.findViewById(R.id.spinner_activity_type);
-        Button btnStart = (Button) view.findViewById(R.id.btn_start);
-        Button btnStop = (Button) view.findViewById(R.id.btn_stop);
+        btnStart = (Button) view.findViewById(R.id.btn_start);
+        btnStop = (Button) view.findViewById(R.id.btn_stop);
 
         initialiseActivitySpinner();
 
         // Button listeners
+        btnStop.setEnabled(false);
         btnStart.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                subscribe();
-                startSession();
+                presenter.subscribe();
+                String selectedActivity = dropDownListActivityType.getSelectedItem().toString();
+                presenter.startSession(ActivityRecordingFragment.this, selectedActivity);
             }
         });
 
         btnStop.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                stopSession();
-                unsubscribe();
+                presenter.stopSession(ActivityRecordingFragment.this);
+                presenter.unsubscribe();
             }
         });
 
@@ -82,68 +80,6 @@ public class ActivityRecordingFragment extends Fragment {
         dropDownListActivityType.setAdapter(adapter);
     }
 
-    private void subscribe() {
-        frh.subscribeIfNotExistingSubscription(TYPE_DISTANCE_DELTA)
-                .onErrorReturn(loggingErrorHandler())
-                .subscribe();
-    }
-
-    private void unsubscribe() {
-        frh.unsubscribe(TYPE_DISTANCE_DELTA)
-                .onErrorReturn(loggingErrorHandler())
-                .subscribe();
-    }
-
-    private void startSession() {
-        if (session == null) {
-            session = buildSession();
-            fsh.startSession(session)
-                    .onErrorReturn(loggingErrorHandler())
-                    .subscribe();
-        }
-    }
-
-    private Session buildSession() {
-        String selectedActivity = dropDownListActivityType.getSelectedItem().toString();
-        Date currTime = new Date();
-        String sessionName = selectedActivity + "-" + formatTime(currTime.getTime());
-
-        return new Session.Builder()
-                .setName(sessionName)
-                .setIdentifier(UUID.randomUUID().toString())
-                .setDescription("Session of " + selectedActivity)
-                .setStartTime(currTime.getTime(), MILLISECONDS)
-                .setActivity(selectedActivity)
-                .build();
-    }
-
-    private void stopSession() {
-        if (session == null || !session.isOngoing()) {
-            return;
-        }
-
-        fsh.stopSession(session.getIdentifier())
-                .firstOrDefault(null)
-                .map(new Func1<Session, Void>() {
-                    @Override
-                    public Void call(Session session) {
-                        notifySessionStopped(session);
-                        return null;
-                    }
-                })
-                .onErrorReturn(loggingErrorHandler())
-                .subscribe();
-    }
-
-    private void notifySessionStopped(Session session) {
-        if (session != null) {
-            String toastMsg = "Session stopped." +
-                    "\nIt started at " + formatTime(session.getStartTime(MILLISECONDS)) +
-                    "\nIt ended at " + formatTime(session.getEndTime(MILLISECONDS));
-            Toast.makeText(getContext(), toastMsg, Toast.LENGTH_LONG).show();
-        }
-    }
-
     private List<String> buildActivitiesList() {
         List<String> activities = new ArrayList<>();
         activities.add(FitnessActivities.RUNNING);
@@ -152,20 +88,37 @@ public class ActivityRecordingFragment extends Fragment {
         return activities;
     }
 
+    @Override
+    public void sessionStarting(Session session) {
+        btnStart.setEnabled(false);
+    }
+
+    @Override
+    public void sessionStarted(Session session) {
+        btnStop.setEnabled(true);
+        Toast.makeText(getContext(), "Session started!", Toast.LENGTH_SHORT).show();
+    }
+
+    @Override
+    public void sessionStopping(Session session) {
+        btnStop.setEnabled(false);
+    }
+
+    @Override
+    public void sessionStopped(Session session) {
+        btnStart.setEnabled(true);
+
+        String toastMsg = "Session stopped." +
+                "\nIt started at " + formatTime(session.getStartTime(MILLISECONDS)) +
+                "\nIt ended at " + formatTime(session.getEndTime(MILLISECONDS));
+        Toast.makeText(getContext(), toastMsg, Toast.LENGTH_LONG).show();
+    }
+
     private String formatTime(long timeMillis) {
         SimpleDateFormat df = new SimpleDateFormat(DATE_FORMAT_PATTERN_DEFAULT);
         return df.format(new Date(timeMillis));
     }
 
-    private Func1<Throwable, Void> loggingErrorHandler() {
-        return new Func1<Throwable, Void>() {
-            @Override
-            public Void call(Throwable t) {
-                Log.e(TAG, t.getMessage(), t);
-                return null;
-            }
-        };
-    }
 
     interface Injector {
         void inject(ActivityRecordingFragment frag);

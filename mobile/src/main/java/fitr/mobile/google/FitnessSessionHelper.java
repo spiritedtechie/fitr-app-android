@@ -8,7 +8,7 @@ public interface FitnessSessionHelper {
 
     String TAG = "FitnessSessionHelper";
 
-    Observable<Void> startSession(Session session);
+    Observable<Session> startSession(Session session);
 
     Observable<Session> stopSession(String sessionId);
 

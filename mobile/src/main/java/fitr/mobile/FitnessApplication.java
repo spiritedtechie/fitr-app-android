@@ -2,6 +2,7 @@ package fitr.mobile;
 
 import android.app.Application;
 
+import fitr.mobile.config.ActivityRecordingModule;
 import fitr.mobile.config.AppModule;
 import fitr.mobile.config.DaggerFitnessComponent;
 import fitr.mobile.config.DistanceModule;
@@ -20,6 +21,7 @@ public class FitnessApplication extends Application {
                 .appModule(new AppModule(this))
                 .fitnessApiModule(new FitnessApiModule())
                 .distanceModule(new DistanceModule())
+                .activityRecordingModule(new ActivityRecordingModule())
                 .build();
     }
 

@@ -8,7 +8,8 @@ import fitr.mobile.DistanceReportsFragment;
 import fitr.mobile.MainActivity;
 
 @Singleton
-@Component(modules = {AppModule.class, FitnessApiModule.class, DistanceModule.class})
+@Component(modules = {
+        AppModule.class, FitnessApiModule.class, DistanceModule.class, ActivityRecordingModule.class})
 public interface FitnessComponent {
 
     void inject(MainActivity mainActivity);
@@ -17,3 +18,5 @@ public interface FitnessComponent {
 
     void inject(DistanceReportsFragment distanceReportsFragment);
 }
+
+

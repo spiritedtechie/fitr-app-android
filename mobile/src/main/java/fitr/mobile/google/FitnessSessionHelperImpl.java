@@ -22,11 +22,11 @@ public class FitnessSessionHelperImpl implements FitnessSessionHelper {
     }
 
     @Override
-    public Observable<Void> startSession(final Session session) {
+    public Observable<Session> startSession(final Session session) {
 
-        return Observable.create(new Observable.OnSubscribe<Void>() {
+        return Observable.create(new Observable.OnSubscribe<Session>() {
             @Override
-            public void call(final Subscriber<? super Void> subscriber) {
+            public void call(final Subscriber<? super Session> subscriber) {
 
                 if (client == null || !client.isConnected()) {
                     subscriber.onError(new IllegalStateException("Client is not available or not connected"));
@@ -44,7 +44,7 @@ public class FitnessSessionHelperImpl implements FitnessSessionHelper {
                         if (subscriber.isUnsubscribed()) return;
                         if (status.isSuccess()) {
                             Log.i(TAG, "Successfully started session " + session.getIdentifier());
-                            subscriber.onNext(null);
+                            subscriber.onNext(session);
                             subscriber.onCompleted();
                         } else {
                             Log.i(TAG, "There was a problem starting session.");
