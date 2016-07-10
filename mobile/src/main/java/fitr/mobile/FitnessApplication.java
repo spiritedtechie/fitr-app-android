@@ -3,26 +3,28 @@ package fitr.mobile;
 import android.app.Application;
 
 import fitr.mobile.config.AppModule;
-import fitr.mobile.config.DaggerFitnessApiComponent;
-import fitr.mobile.config.FitnessApiComponent;
+import fitr.mobile.config.DaggerFitnessComponent;
+import fitr.mobile.config.DistanceModule;
 import fitr.mobile.config.FitnessApiModule;
+import fitr.mobile.config.FitnessComponent;
 
 public class FitnessApplication extends Application {
 
-    private FitnessApiComponent fitnessApiComponent;
+    private FitnessComponent fitnessComponent;
 
     @Override
     public void onCreate() {
         super.onCreate();
 
-        fitnessApiComponent = DaggerFitnessApiComponent.builder()
+        fitnessComponent = DaggerFitnessComponent.builder()
                 .appModule(new AppModule(this))
                 .fitnessApiModule(new FitnessApiModule())
+                .distanceModule(new DistanceModule())
                 .build();
     }
 
-    public FitnessApiComponent getFitnessApiComponent() {
-        return fitnessApiComponent;
+    public FitnessComponent getFitnessComponent() {
+        return fitnessComponent;
     }
 
 }

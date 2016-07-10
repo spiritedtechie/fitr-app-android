@@ -49,12 +49,12 @@ public class MainActivity extends AppCompatActivity implements
 
     @Override
     public void inject(ActivityRecordingFragment frag) {
-        ((FitnessApplication) getApplication()).getFitnessApiComponent().inject(frag);
+        ((FitnessApplication) getApplication()).getFitnessComponent().inject(frag);
     }
 
     @Override
     public void inject(DistanceReportsFragment frag) {
-        ((FitnessApplication) getApplication()).getFitnessApiComponent().inject(frag);
+        ((FitnessApplication) getApplication()).getFitnessComponent().inject(frag);
     }
 
     @Override
@@ -64,7 +64,7 @@ public class MainActivity extends AppCompatActivity implements
         setContentView(R.layout.activity_main);
 
         // Inject
-        ((FitnessApplication) getApplication()).getFitnessApiComponent().inject(this);
+        ((FitnessApplication) getApplication()).getFitnessComponent().inject(this);
 
         // Set a Toolbar to replace the ActionBar.
         toolbar = (Toolbar) findViewById(R.id.toolbar);
