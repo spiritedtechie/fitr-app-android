@@ -71,7 +71,7 @@ public class DistancePresenter {
             @Override
             public Void call(DataReadResult dataReadResult) {
                 List<AggregatedDistance> data = extractData(dataReadResult);
-                BarData bd = refreshDistanceBarChart(data);
+                BarData bd = mapToBarData(data);
                 view.setDistanceChartData(bd);
                 view.setDistanceTableData(data);
                 return null;
@@ -115,7 +115,7 @@ public class DistancePresenter {
         return distanceAggregateData;
     }
 
-    private BarData refreshDistanceBarChart(List<AggregatedDistance> data) {
+    private BarData mapToBarData(List<AggregatedDistance> data) {
         List<String> xValues = new ArrayList<>();
         List<BarEntry> barEntries = new ArrayList<>();
         for (int i = 0; i < data.size(); i++) {
