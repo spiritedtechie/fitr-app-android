@@ -9,7 +9,7 @@ import fitr.mobile.MainActivity;
 
 @Singleton
 @Component(modules = {AppModule.class, FitnessApiModule.class})
-public interface FitnessApiComponent {
+public interface FitnessApiComponent2 {
 
     void inject(MainActivity mainActivity);
 
