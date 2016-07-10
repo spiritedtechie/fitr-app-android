@@ -1,8 +1,6 @@
 <resources>
     <string name="app_name">Fitr</string>
 
-    <string name="intro_text">Select your activity and hit Start!</string>
-
     <string name="permission_rationale">Location data is used as part of the Google Fit API</string>
     <string name="permission_denied_explanation">Permission was denied, but is needed for core
         functionality.</string>
@@ -12,11 +10,11 @@
 
     <string name="drawer_open">Open navigation drawer</string>
     <string name="drawer_close">Close navigation drawer</string>
-
     <string name="drawer_header">Header</string>
     <string name="drawer_item_workout">Workout</string>
     <string name="drawer_item_distance">Distance</string>
 
+    <string name="activity_intro_text">Select your activity and hit Start!</string>
     <string name="activity_record_start">Start</string>
     <string name="activity_record_stop">Stop</string>
 

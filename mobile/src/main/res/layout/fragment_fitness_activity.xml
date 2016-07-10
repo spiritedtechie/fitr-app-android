@@ -12,7 +12,7 @@
         android:id="@+id/tv_instructions"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="@string/intro_text" />
+        android:text="@string/activity_intro_text" />
 
     <Spinner
         android:id="@+id/spinner_activity_type"

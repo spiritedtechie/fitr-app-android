@@ -64,7 +64,21 @@ public class DistanceReportsFragment extends Fragment {
         barChart = (BarChart) view.findViewById(R.id.bc_distance_chart);
         table = (TableLayout) view.findViewById(R.id.tl_distance_table);
         swipeLayout = (SwipeRefreshLayout) view.findViewById(R.id.srl_swipe_container);
-        swipeLayout.setOnRefreshListener(new SwipeRefreshLayout.OnRefreshListener() {
+
+        swipeLayout.setOnRefreshListener(swipeRefreshListener());
+
+        // Configure chart
+        barChart.animateX(3000);
+        barChart.animateY(3000);
+
+        // Refresh chart
+        refreshHistoricalData().onErrorReturn(loggingErrorHandler()).subscribe();
+
+        return view;
+    }
+
+    private SwipeRefreshLayout.OnRefreshListener swipeRefreshListener() {
+        return new SwipeRefreshLayout.OnRefreshListener() {
             @Override
             public void onRefresh() {
                 swipeLayout.setRefreshing(true);
@@ -86,20 +100,11 @@ public class DistanceReportsFragment extends Fragment {
                         })
                         .subscribe();
             }
-        });
-
-        // Configure chart
-        barChart.animateX(3000);
-        barChart.animateY(3000);
-
-        // Refresh chart
-        refreshHistoricalData().onErrorReturn(loggingErrorHandler()).subscribe();
-
-        return view;
+        };
     }
 
     private Observable refreshHistoricalData() {
-        Func1<DataReadResult, Void> action = new Func1<DataReadResult, Void>() {
+        Func1<DataReadResult, Void> successAction = new Func1<DataReadResult, Void>() {
             @Override
             public Void call(DataReadResult dataReadResult) {
                 List<AggregatedDistance> data = extractData(dataReadResult);
@@ -110,7 +115,7 @@ public class DistanceReportsFragment extends Fragment {
         };
 
         return fhh.readData(buildDataReadRequest())
-                .map(action)
+                .map(successAction)
                 .onErrorReturn(loggingErrorHandler());
     }
 
