@@ -4,12 +4,12 @@ import android.app.Application;
 
 import fitr.mobile.config.AppModule;
 import fitr.mobile.config.DaggerFitnessApiComponent;
-import fitr.mobile.config.FitnessApiComponent2;
+import fitr.mobile.config.FitnessApiComponent;
 import fitr.mobile.config.FitnessApiModule;
 
 public class FitnessApplication extends Application {
 
-    private FitnessApiComponent2 fitnessApiComponent;
+    private FitnessApiComponent fitnessApiComponent;
 
     @Override
     public void onCreate() {
@@ -21,7 +21,7 @@ public class FitnessApplication extends Application {
                 .build();
     }
 
-    public FitnessApiComponent2 getFitnessApiComponent() {
+    public FitnessApiComponent getFitnessApiComponent() {
         return fitnessApiComponent;
     }
 
