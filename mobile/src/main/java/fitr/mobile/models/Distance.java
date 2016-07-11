@@ -2,7 +2,7 @@ package fitr.mobile.models;
 
 import java.util.Date;
 
-public class AggregatedDistance {
+public class Distance {
 
     private Date startDate;
 
@@ -10,7 +10,7 @@ public class AggregatedDistance {
 
     private Float distanceInMeters;
 
-    public AggregatedDistance(Date startDate, Date endDate, Float distanceInMeters) {
+    public Distance(Date startDate, Date endDate, Float distanceInMeters) {
         this.startDate = startDate;
         this.endDate = endDate;
         this.distanceInMeters = distanceInMeters;

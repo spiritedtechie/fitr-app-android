@@ -2,7 +2,7 @@ package fitr.mobile.views;
 
 import com.google.android.gms.fitness.data.Session;
 
-public interface ActivityRecordingView {
+public interface ActivityRecordingView extends View {
 
     void sessionStarting(Session session);
 

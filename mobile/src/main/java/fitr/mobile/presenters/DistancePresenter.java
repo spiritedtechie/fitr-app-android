@@ -19,68 +19,80 @@ import java.util.Date;
 import java.util.List;
 
 import fitr.mobile.google.FitnessHistoryHelper;
-import fitr.mobile.models.AggregatedDistance;
+import fitr.mobile.models.Distance;
+import fitr.mobile.models.DistanceData;
 import fitr.mobile.views.DistanceView;
-import rx.Observable;
+import rx.Subscriber;
+import rx.Subscription;
+import rx.android.schedulers.AndroidSchedulers;
 import rx.functions.Func1;
+import rx.schedulers.Schedulers;
 
 import static com.google.android.gms.fitness.data.DataType.AGGREGATE_DISTANCE_DELTA;
 import static com.google.android.gms.fitness.data.DataType.TYPE_DISTANCE_DELTA;
 import static java.util.concurrent.TimeUnit.DAYS;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 
-public class DistancePresenter {
+public class DistancePresenter extends BasePresenter<DistanceView> {
 
     private static final String TAG = "DistancePresenter";
 
     private FitnessHistoryHelper fhh;
 
+    // Subscriptions
+    private Subscription refreshSubscription;
+
     public DistancePresenter(FitnessHistoryHelper fhh) {
         this.fhh = fhh;
     }
 
-    public void refreshData(final DistanceView view) {
-        this.buildBaseObservable(view).subscribe();
+    @Override
+    public void attachView(DistanceView view) {
+        super.attachView(view);
     }
 
-    public void swipeRefreshData(final DistanceView view) {
-
-        view.setRefreshing(true);
-
-        this.buildBaseObservable(view)
-                .map(new Func1<Void, Void>() {
-                    @Override
-                    public Void call(Void o) {
-                        view.setRefreshing(false);
-                        return null;
-                    }
-                })
-                .onErrorReturn(new Func1<Throwable, Void>() {
-                    @Override
-                    public Void call(Throwable throwable) {
-                        view.setRefreshing(false);
-                        loggingErrorHandler().call(throwable);
-                        return null;
-                    }
-                })
-                .subscribe();
+    @Override
+    public void detachView() {
+        unsubscribe(refreshSubscription);
+        super.detachView();
     }
 
-    private Observable buildBaseObservable(final DistanceView view) {
-        Func1<DataReadResult, Void> successAction = new Func1<DataReadResult, Void>() {
-            @Override
-            public Void call(DataReadResult dataReadResult) {
-                List<AggregatedDistance> data = extractData(dataReadResult);
-                BarData bd = mapToBarData(data);
-                view.setDistanceChartData(bd);
-                view.setDistanceTableData(data);
-                return null;
-            }
-        };
+    public void refreshData() {
+        checkViewAttached();
 
-        return fhh.readData(buildDataReadRequest())
-                .map(successAction)
-                .onErrorReturn(loggingErrorHandler());
+        if (getView() != null) {
+            getView().setRefreshing(true);
+        }
+
+        refreshSubscription = fhh.readData(buildDataReadRequest())
+                .observeOn(AndroidSchedulers.mainThread())
+                .subscribeOn(Schedulers.io())
+                .map(new Func1<DataReadResult, DistanceData>() {
+                    @Override
+                    public DistanceData call(DataReadResult dataReadResult) {
+                        List<Distance> data = extractData(dataReadResult);
+                        BarData barData = mapToBarData(data);
+                        return new DistanceData(data, barData);
+                    }
+                })
+                .subscribe(new Subscriber<DistanceData>() {
+                    @Override
+                    public void onCompleted() {
+                        getView().setRefreshing(false);
+                    }
+
+                    @Override
+                    public void onError(Throwable e) {
+                        loggingErrorHandler().call(e);
+                        getView().setRefreshing(false);
+                    }
+
+                    @Override
+                    public void onNext(DistanceData data) {
+                        getView().setDistanceChartData(data.getDistanceBarData());
+                        getView().setDistanceTableData(data.getDistances());
+                    }
+                });
     }
 
     private DataReadRequest buildDataReadRequest() {
@@ -98,8 +110,8 @@ public class DistancePresenter {
                 .build();
     }
 
-    private List<AggregatedDistance> extractData(DataReadResult dataReadResult) {
-        final List<AggregatedDistance> distanceAggregateData = new ArrayList<>();
+    private List<Distance> extractData(DataReadResult dataReadResult) {
+        final List<Distance> distanceAggregateData = new ArrayList<>();
         for (Bucket bucket : dataReadResult.getBuckets()) {
             DataSet dataSet = bucket.getDataSet(AGGREGATE_DISTANCE_DELTA);
             for (DataPoint dp : dataSet.getDataPoints()) {
@@ -109,13 +121,13 @@ public class DistancePresenter {
                 Date endDate = new Date(dp.getEndTime(MILLISECONDS));
                 float distance = value.asFloat();
 
-                distanceAggregateData.add(new AggregatedDistance(startDate, endDate, distance));
+                distanceAggregateData.add(new Distance(startDate, endDate, distance));
             }
         }
         return distanceAggregateData;
     }
 
-    private BarData mapToBarData(List<AggregatedDistance> data) {
+    private BarData mapToBarData(List<Distance> data) {
         List<String> xValues = new ArrayList<>();
         List<BarEntry> barEntries = new ArrayList<>();
         for (int i = 0; i < data.size(); i++) {

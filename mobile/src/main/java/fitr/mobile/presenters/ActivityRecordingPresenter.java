@@ -13,12 +13,16 @@ import javax.inject.Inject;
 import fitr.mobile.google.FitnessRecordingHelper;
 import fitr.mobile.google.FitnessSessionHelper;
 import fitr.mobile.views.ActivityRecordingView;
+import rx.Subscriber;
+import rx.Subscription;
+import rx.android.schedulers.AndroidSchedulers;
 import rx.functions.Func1;
+import rx.schedulers.Schedulers;
 
 import static com.google.android.gms.fitness.data.DataType.TYPE_DISTANCE_DELTA;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 
-public class ActivityRecordingPresenter {
+public class ActivityRecordingPresenter extends BasePresenter<ActivityRecordingView> {
 
     private static final String TAG = "RecordingPresenter";
 
@@ -26,48 +30,122 @@ public class ActivityRecordingPresenter {
 
     @Inject
     FitnessRecordingHelper frh;
+
     @Inject
     FitnessSessionHelper fsh;
 
     private Session session;
+
+    private Subscription subscribeSubscriber;
+    private Subscription unsubscribeSubcriber;
+    private Subscription stopSessionSubscriber;
+    private Subscription startSessionSubscriber;
 
     public ActivityRecordingPresenter(FitnessRecordingHelper frh, FitnessSessionHelper fsh) {
         this.frh = frh;
         this.fsh = fsh;
     }
 
+    @Override
+    public void attachView(ActivityRecordingView view) {
+        super.attachView(view);
+    }
+
+    @Override
+    public void detachView() {
+        unsubscribe(subscribeSubscriber);
+        unsubscribe(unsubscribeSubcriber);
+        unsubscribe(stopSessionSubscriber);
+        unsubscribe(startSessionSubscriber);
+        super.detachView();
+    }
+
     public void subscribe() {
-        frh.subscribeIfNotExistingSubscription(TYPE_DISTANCE_DELTA)
+        checkViewAttached();
+
+        subscribeSubscriber = frh.subscribeIfNotExistingSubscription(TYPE_DISTANCE_DELTA)
+                .observeOn(AndroidSchedulers.mainThread())
+                .subscribeOn(Schedulers.io())
                 .onErrorReturn(loggingErrorHandler())
                 .subscribe();
     }
 
     public void unsubscribe() {
-        frh.unsubscribe(TYPE_DISTANCE_DELTA)
+        checkViewAttached();
+
+        unsubscribeSubcriber = frh.unsubscribe(TYPE_DISTANCE_DELTA)
+                .observeOn(AndroidSchedulers.mainThread())
+                .subscribeOn(Schedulers.io())
                 .onErrorReturn(loggingErrorHandler())
                 .subscribe();
     }
 
-    public void startSession(final ActivityRecordingView view, String sessionType) {
+    public void startSession(String sessionType) {
+        checkViewAttached();
+
         if (session != null && session.isOngoing()) {
             Log.i(TAG, "Session already ongoing.");
             return;
         }
 
         this.session = buildSession(sessionType);
-        view.sessionStarting(session);
 
-        fsh.startSession(this.session)
-                .map(new Func1<Session, Void>() {
+        if (getView() != null) {
+            getView().sessionStarting(session);
+        }
+
+        startSessionSubscriber = fsh.startSession(this.session)
+                .observeOn(AndroidSchedulers.mainThread())
+                .subscribeOn(Schedulers.io())
+                .subscribe(new Subscriber<Session>() {
                     @Override
-                    public Void call(Session session) {
-                        view.sessionStarted(session);
-                        return null;
+                    public void onCompleted() {
                     }
-                })
-                .onErrorReturn(loggingErrorHandler())
-                .subscribe();
 
+                    @Override
+                    public void onError(Throwable e) {
+                        loggingErrorHandler().call(e);
+                    }
+
+                    @Override
+                    public void onNext(Session session) {
+                        getView().sessionStarted(session);
+                    }
+                });
+    }
+
+    public void stopSession() {
+        checkViewAttached();
+
+        if (session == null || !session.isOngoing()) {
+            Log.i(TAG, "Session is not available or already stopped.");
+            return;
+        }
+
+        if (getView() != null) {
+            getView().sessionStopping(session);
+        }
+
+        stopSessionSubscriber = fsh.stopSession(session.getIdentifier())
+                .observeOn(AndroidSchedulers.mainThread())
+                .subscribeOn(Schedulers.io())
+                .firstOrDefault(null)
+                .subscribe(new Subscriber<Session>() {
+                    @Override
+                    public void onCompleted() {
+                        ActivityRecordingPresenter.this.session = null;
+                    }
+
+                    @Override
+                    public void onError(Throwable e) {
+                        loggingErrorHandler().call(e);
+                    }
+
+                    @Override
+                    public void onNext(Session session) {
+                        if (session != null) getView().sessionStopped(session);
+                    }
+                });
     }
 
     private Session buildSession(String activityType) {
@@ -81,28 +159,6 @@ public class ActivityRecordingPresenter {
                 .setStartTime(currTime.getTime(), MILLISECONDS)
                 .setActivity(activityType)
                 .build();
-    }
-
-    public void stopSession(final ActivityRecordingView view) {
-        if (session == null || !session.isOngoing()) {
-            Log.i(TAG, "Session is not available or already stopped.");
-            return;
-        }
-
-        view.sessionStopping(session);
-
-        fsh.stopSession(session.getIdentifier())
-                .firstOrDefault(null)
-                .map(new Func1<Session, Void>() {
-                    @Override
-                    public Void call(Session session) {
-                        ActivityRecordingPresenter.this.session = null;
-                        view.sessionStopped(session);
-                        return null;
-                    }
-                })
-                .onErrorReturn(loggingErrorHandler())
-                .subscribe();
     }
 
     private Func1<Throwable, Void> loggingErrorHandler() {

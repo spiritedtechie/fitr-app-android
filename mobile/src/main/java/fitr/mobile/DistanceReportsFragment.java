@@ -19,10 +19,9 @@ import java.util.List;
 
 import javax.inject.Inject;
 
-import fitr.mobile.models.AggregatedDistance;
+import fitr.mobile.models.Distance;
 import fitr.mobile.presenters.DistancePresenter;
 import fitr.mobile.views.DistanceView;
-import rx.functions.Func1;
 
 public class DistanceReportsFragment extends Fragment implements
         DistanceView {
@@ -42,13 +41,13 @@ public class DistanceReportsFragment extends Fragment implements
     public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
 
         ((Injector) getActivity()).inject(this);
+        distancePresenter.attachView(this);
 
-        View view = inflater.inflate(R.layout.fragment_report_distance, container, false);
-
+        // Views
+        final View view = inflater.inflate(R.layout.fragment_report_distance, container, false);
         barChart = (BarChart) view.findViewById(R.id.bc_distance_chart);
         table = (TableLayout) view.findViewById(R.id.tl_distance_table);
         swipeLayout = (SwipeRefreshLayout) view.findViewById(R.id.srl_swipe_container);
-
         swipeLayout.setOnRefreshListener(swipeRefreshListener());
 
         // Configure chart
@@ -56,16 +55,22 @@ public class DistanceReportsFragment extends Fragment implements
         barChart.animateY(3000);
 
         // Refresh chart
-        distancePresenter.refreshData(this);
+        distancePresenter.refreshData();
 
         return view;
+    }
+
+    @Override
+    public void onDestroyView() {
+        distancePresenter.detachView();
+        super.onDestroyView();
     }
 
     private SwipeRefreshLayout.OnRefreshListener swipeRefreshListener() {
         return new SwipeRefreshLayout.OnRefreshListener() {
             @Override
             public void onRefresh() {
-                distancePresenter.swipeRefreshData(DistanceReportsFragment.this);
+                distancePresenter.refreshData();
             }
         };
     }
@@ -83,9 +88,9 @@ public class DistanceReportsFragment extends Fragment implements
     }
 
     @Override
-    public void setDistanceTableData(List<AggregatedDistance> data) {
+    public void setDistanceTableData(List<Distance> data) {
         table.removeAllViews();
-        for (AggregatedDistance dataItem : data) {
+        for (Distance dataItem : data) {
             TableRow tr = new TableRow(getContext());
             tr.setPadding(0, 10, 0, 0);
             TextView c1 = new TextView(getContext());

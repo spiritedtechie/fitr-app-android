@@ -43,6 +43,7 @@ public class ActivityRecordingFragment extends Fragment implements
     public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
 
         ((Injector) getActivity()).inject(this);
+        presenter.attachView(this);
 
         View view = inflater.inflate(R.layout.fragment_fitness_activity, container, false);
 
@@ -59,19 +60,25 @@ public class ActivityRecordingFragment extends Fragment implements
             public void onClick(View v) {
                 presenter.subscribe();
                 String selectedActivity = dropDownListActivityType.getSelectedItem().toString();
-                presenter.startSession(ActivityRecordingFragment.this, selectedActivity);
+                presenter.startSession(selectedActivity);
             }
         });
 
         btnStop.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                presenter.stopSession(ActivityRecordingFragment.this);
+                presenter.stopSession();
                 presenter.unsubscribe();
             }
         });
 
         return view;
+    }
+
+    @Override
+    public void onDestroyView() {
+        presenter.detachView();
+        super.onDestroyView();
     }
 
     private void initialiseActivitySpinner() {
