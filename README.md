@@ -1,15 +1,19 @@
 Description
 -----------
 
-A pet project to explore technologies including Android, support libraries and the Google Fitness APIs.
-Also to explore the best practices in Android, material design and software design patterns for Android projects.
+A pet project to explore:
+
+- Latest Android technologies / Google APIs
+- Material design library
+- Android best practices
+- Software design patterns for Android
 
 Technologies
 ------------
 
 - Android (23)
 - Support libraries (24.0.0) - design, appcompat
-- Play services (9.2.0)
+- Play services (9.2.0) - Google Fitness
 - Dagger
 - RXJava (1.1.6)
 - MPAndroidChart
