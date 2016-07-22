@@ -68,11 +68,8 @@ public class FitnessRecordingHelperImpl implements FitnessRecordingHelper {
         return Observable.create(new Observable.OnSubscribe<Subscription>() {
             @Override
             public void call(final Subscriber<? super Subscription> subscriber) {
+                if (clientUnavailable(subscriber)) return;
 
-                if (client == null || !client.isConnected()) {
-                    subscriber.onError(new IllegalStateException("Client is not available or not connected"));
-                    return;
-                }
                 Fitness.RecordingApi.listSubscriptions(client).setResultCallback(new ResultCallback<ListSubscriptionsResult>() {
                     @Override
                     public void onResult(@NonNull ListSubscriptionsResult listSubscriptionsResult) {
@@ -99,11 +96,8 @@ public class FitnessRecordingHelperImpl implements FitnessRecordingHelper {
         return Observable.create(new Observable.OnSubscribe<Void>() {
             @Override
             public void call(final Subscriber<? super Void> subscriber) {
+                if (clientUnavailable(subscriber)) return;
 
-                if (client == null || !client.isConnected()) {
-                    subscriber.onError(new IllegalStateException("Client is not available or not connected"));
-                    return;
-                }
                 Fitness.RecordingApi.subscribe(client, dataType).setResultCallback(new ResultCallback<Status>() {
                     @Override
                     public void onResult(@NonNull Status status) {
@@ -131,11 +125,8 @@ public class FitnessRecordingHelperImpl implements FitnessRecordingHelper {
         return Observable.create(new Observable.OnSubscribe<Void>() {
             @Override
             public void call(final Subscriber<? super Void> subscriber) {
+                if (clientUnavailable(subscriber)) return;
 
-                if (client == null || !client.isConnected()) {
-                    subscriber.onError(new IllegalStateException("Client is not available or not connected"));
-                    return;
-                }
                 Fitness.RecordingApi.unsubscribe(client, dataType).setResultCallback(new ResultCallback<Status>() {
                     @Override
                     public void onResult(@NonNull Status status) {
@@ -152,5 +143,13 @@ public class FitnessRecordingHelperImpl implements FitnessRecordingHelper {
                 });
             }
         });
+    }
+
+    private boolean clientUnavailable(Subscriber subscriber) {
+        if (client == null || !client.isConnected()) {
+            subscriber.onError(new IllegalStateException("Client is not available or not connected"));
+            return true;
+        }
+        return false;
     }
 }

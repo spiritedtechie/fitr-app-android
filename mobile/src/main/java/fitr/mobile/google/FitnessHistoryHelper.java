@@ -9,7 +9,6 @@ public interface FitnessHistoryHelper {
 
     String TAG = "FitnessHistoryHelper";
 
-
     Observable<DataReadResult> readData(DataReadRequest request);
 
 }

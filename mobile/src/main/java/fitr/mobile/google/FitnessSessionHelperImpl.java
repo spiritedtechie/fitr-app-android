@@ -27,11 +27,7 @@ public class FitnessSessionHelperImpl implements FitnessSessionHelper {
         return Observable.create(new Observable.OnSubscribe<Session>() {
             @Override
             public void call(final Subscriber<? super Session> subscriber) {
-
-                if (client == null || !client.isConnected()) {
-                    subscriber.onError(new IllegalStateException("Client is not available or not connected"));
-                    return;
-                }
+                if (clientUnavailable(subscriber)) return;
 
                 if (session == null) {
                     subscriber.onError(new IllegalStateException("Session is not available"));
@@ -62,11 +58,7 @@ public class FitnessSessionHelperImpl implements FitnessSessionHelper {
         return Observable.create(new Observable.OnSubscribe<Session>() {
             @Override
             public void call(final Subscriber<? super Session> subscriber) {
-
-                if (client == null || !client.isConnected()) {
-                    subscriber.onError(new IllegalStateException("Client is not available or not connected"));
-                    return;
-                }
+                if (clientUnavailable(subscriber)) return;
 
                 Fitness.SessionsApi.stopSession(client, sessionId).setResultCallback(new ResultCallback<SessionStopResult>() {
                     @Override
@@ -86,6 +78,14 @@ public class FitnessSessionHelperImpl implements FitnessSessionHelper {
                 });
             }
         });
+    }
+
+    private boolean clientUnavailable(Subscriber<? super Session> subscriber) {
+        if (client == null || !client.isConnected()) {
+            subscriber.onError(new IllegalStateException("Client is not available or not connected"));
+            return true;
+        }
+        return false;
     }
 
 }

@@ -29,9 +29,11 @@ public class BasePresenter<T extends View> implements Presenter<T> {
 
     protected void unsubscribe(Subscription... subscriptions) {
         Log.i("BasePresenter", "Unsubscribing Rx observable subscriptions");
-        for (Subscription s : subscriptions) {
-            if (s != null) {
-                s.unsubscribe();
+        if (subscriptions != null) {
+            for (Subscription s : subscriptions) {
+                if (s != null) {
+                    s.unsubscribe();
+                }
             }
         }
     }

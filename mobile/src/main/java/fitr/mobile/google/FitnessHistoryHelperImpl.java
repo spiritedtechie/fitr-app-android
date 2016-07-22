@@ -26,11 +26,8 @@ public class FitnessHistoryHelperImpl implements FitnessHistoryHelper {
 
             @Override
             public void call(final Subscriber<? super DataReadResult> subscriber) {
+                if (clientUnavailable(subscriber)) return;
 
-                if (client == null || !client.isConnected()) {
-                    subscriber.onError(new IllegalStateException("Client is not available or not connected"));
-                    return;
-                }
                 Fitness.HistoryApi.readData(client, request).setResultCallback(new ResultCallback<DataReadResult>() {
                     @Override
                     public void onResult(@NonNull DataReadResult dataReadResult) {
@@ -47,5 +44,13 @@ public class FitnessHistoryHelperImpl implements FitnessHistoryHelper {
                 });
             }
         });
+    }
+
+    private boolean clientUnavailable(Subscriber<? super DataReadResult> subscriber) {
+        if (client == null || !client.isConnected()) {
+            subscriber.onError(new IllegalStateException("Client is not available or not connected"));
+            return true;
+        }
+        return false;
     }
 }
