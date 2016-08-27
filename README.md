@@ -15,6 +15,7 @@ Technologies
 - Support libraries (24.0.0) - design, appcompat
 - Play services (9.2.0) - Google Fitness
 - Dagger
+- Butterknife
 - RXJava (1.1.6)
 - MPAndroidChart
 

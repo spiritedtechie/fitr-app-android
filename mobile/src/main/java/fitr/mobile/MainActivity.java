@@ -23,6 +23,8 @@ import android.view.View;
 
 import javax.inject.Inject;
 
+import butterknife.BindView;
+import butterknife.ButterKnife;
 import fitr.mobile.google.FitnessClientManager;
 import rx.functions.Func1;
 
@@ -39,9 +41,13 @@ public class MainActivity extends AppCompatActivity implements
     private static final int REQUEST_PERMISSIONS_REQUEST_CODE = 34;
 
     // Views
-    private DrawerLayout drawerLayout;
-    private Toolbar toolbar;
-    private NavigationView navViewMain;
+    @BindView(R.id.drawer_layout)
+    DrawerLayout drawerLayout;
+    @BindView(R.id.toolbar)
+    Toolbar toolbar;
+    @BindView(R.id.nv_main)
+    NavigationView navViewMain;
+
     private ActionBarDrawerToggle drawerToggle;
 
     @Inject
@@ -60,19 +66,14 @@ public class MainActivity extends AppCompatActivity implements
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-
         setContentView(R.layout.activity_main);
+        ButterKnife.bind(this);
 
         // Inject
         ((FitnessApplication) getApplication()).getFitnessComponent().inject(this);
 
         // Set a Toolbar to replace the ActionBar.
-        toolbar = (Toolbar) findViewById(R.id.toolbar);
         setSupportActionBar(toolbar);
-
-        // Get views
-        drawerLayout = (DrawerLayout) findViewById(R.id.drawer_layout);
-        navViewMain = (NavigationView) findViewById(R.id.nv_main);
 
         initialiseNavigationDrawer();
 

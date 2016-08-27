@@ -19,6 +19,8 @@ import java.util.List;
 
 import javax.inject.Inject;
 
+import butterknife.BindView;
+import butterknife.ButterKnife;
 import fitr.mobile.models.Distance;
 import fitr.mobile.presenters.DistancePresenter;
 import fitr.mobile.views.DistanceView;
@@ -33,9 +35,12 @@ public class DistanceReportsFragment extends Fragment implements
     @Inject
     DistancePresenter distancePresenter;
 
-    private BarChart barChart;
-    private TableLayout table;
-    private SwipeRefreshLayout swipeLayout;
+    @BindView(R.id.bc_distance_chart)
+    BarChart barChart;
+    @BindView(R.id.tl_distance_table)
+    TableLayout table;
+    @BindView(R.id.srl_swipe_container)
+    SwipeRefreshLayout swipeLayout;
 
     @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
@@ -45,9 +50,8 @@ public class DistanceReportsFragment extends Fragment implements
 
         // Views
         final View view = inflater.inflate(R.layout.fragment_report_distance, container, false);
-        barChart = (BarChart) view.findViewById(R.id.bc_distance_chart);
-        table = (TableLayout) view.findViewById(R.id.tl_distance_table);
-        swipeLayout = (SwipeRefreshLayout) view.findViewById(R.id.srl_swipe_container);
+        ButterKnife.bind(this, view);
+
         swipeLayout.setOnRefreshListener(swipeRefreshListener());
 
         // Configure chart

@@ -20,6 +20,8 @@ import java.util.List;
 
 import javax.inject.Inject;
 
+import butterknife.BindView;
+import butterknife.ButterKnife;
 import fitr.mobile.presenters.ActivityRecordingPresenter;
 import fitr.mobile.views.ActivityRecordingView;
 
@@ -35,9 +37,12 @@ public class ActivityRecordingFragment extends Fragment implements
     @Inject
     ActivityRecordingPresenter presenter;
 
-    private Button btnStart;
-    private Button btnStop;
-    private Spinner dropDownListActivityType;
+    @BindView(R.id.btn_start)
+    Button btnStart;
+    @BindView(R.id.btn_stop)
+    Button btnStop;
+    @BindView(R.id.spinner_activity_type)
+    Spinner dropDownListActivityType;
 
     @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
@@ -46,10 +51,7 @@ public class ActivityRecordingFragment extends Fragment implements
         presenter.attachView(this);
 
         View view = inflater.inflate(R.layout.fragment_fitness_activity, container, false);
-
-        dropDownListActivityType = (Spinner) view.findViewById(R.id.spinner_activity_type);
-        btnStart = (Button) view.findViewById(R.id.btn_start);
-        btnStop = (Button) view.findViewById(R.id.btn_stop);
+        ButterKnife.bind(this, view);
 
         initialiseActivitySpinner();
 
@@ -125,7 +127,6 @@ public class ActivityRecordingFragment extends Fragment implements
         SimpleDateFormat df = new SimpleDateFormat(DATE_FORMAT_PATTERN_DEFAULT);
         return df.format(new Date(timeMillis));
     }
-
 
     interface Injector {
         void inject(ActivityRecordingFragment frag);

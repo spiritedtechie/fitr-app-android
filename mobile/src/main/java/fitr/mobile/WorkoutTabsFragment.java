@@ -9,9 +9,17 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 
+import butterknife.BindView;
+import butterknife.ButterKnife;
+
 public class WorkoutTabsFragment extends Fragment {
 
     private static final String TAG = "WorkoutTabs";
+
+    @BindView(R.id.viewpager)
+    ViewPager viewPager;
+    @BindView(R.id.sliding_tabs)
+    TabLayout tabLayout;
 
     @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
@@ -19,9 +27,7 @@ public class WorkoutTabsFragment extends Fragment {
         Log.i(TAG, "onCreateView");
 
         View view = inflater.inflate(R.layout.fragment_container_tab_layout, container, false);
-
-        ViewPager viewPager = (ViewPager) view.findViewById(R.id.viewpager);
-        TabLayout tabLayout = (TabLayout) view.findViewById(R.id.sliding_tabs);
+        ButterKnife.bind(this, view);
 
         viewPager.setAdapter(new WorkoutTabsAdapter(getChildFragmentManager(), getContext()));
         tabLayout.setupWithViewPager(viewPager);
