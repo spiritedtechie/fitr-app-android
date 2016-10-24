@@ -162,12 +162,9 @@ public class ActivityRecordingPresenter extends BasePresenter<ActivityRecordingV
     }
 
     private Func1<Throwable, Void> loggingErrorHandler() {
-        return new Func1<Throwable, Void>() {
-            @Override
-            public Void call(Throwable t) {
-                Log.e(TAG, t.getMessage(), t);
-                return null;
-            }
+        return t -> {
+            Log.e(TAG, t.getMessage(), t);
+            return null;
         };
     }
 

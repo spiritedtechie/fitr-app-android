@@ -57,21 +57,15 @@ public class ActivityRecordingFragment extends Fragment implements
 
         // Button listeners
         btnStop.setEnabled(false);
-        btnStart.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                presenter.subscribe();
-                String selectedActivity = dropDownListActivityType.getSelectedItem().toString();
-                presenter.startSession(selectedActivity);
-            }
+        btnStart.setOnClickListener(v -> {
+            presenter.subscribe();
+            String selectedActivity = dropDownListActivityType.getSelectedItem().toString();
+            presenter.startSession(selectedActivity);
         });
 
-        btnStop.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                presenter.stopSession();
-                presenter.unsubscribe();
-            }
+        btnStop.setOnClickListener(v -> {
+            presenter.stopSession();
+            presenter.unsubscribe();
         });
 
         return view;

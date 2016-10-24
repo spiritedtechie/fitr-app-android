@@ -69,15 +69,12 @@ public class FitnessClientManager {
                         }
                     });
 
-                    client.registerConnectionFailedListener(new OnConnectionFailedListener() {
-                        @Override
-                        public void onConnectionFailed(@NonNull ConnectionResult result) {
-                            Log.i(TAG, "Connection failed");
-                            subscriber.onError(new IllegalStateException("Connection failed"));
-                            try {
-                                result.startResolutionForResult(activity, REQUEST_OAUTH);
-                            } catch (IntentSender.SendIntentException e) {
-                            }
+                    client.registerConnectionFailedListener(result -> {
+                        Log.i(TAG, "Connection failed");
+                        subscriber.onError(new IllegalStateException("Connection failed"));
+                        try {
+                            result.startResolutionForResult(activity, REQUEST_OAUTH);
+                        } catch (IntentSender.SendIntentException e) {
                         }
                     });
 

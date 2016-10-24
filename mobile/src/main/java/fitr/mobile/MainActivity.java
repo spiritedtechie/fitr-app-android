@@ -128,12 +128,9 @@ public class MainActivity extends AppCompatActivity implements
 
     private void initialiseNavigationDrawer() {
         navViewMain.setNavigationItemSelectedListener(
-                new NavigationView.OnNavigationItemSelectedListener() {
-                    @Override
-                    public boolean onNavigationItemSelected(MenuItem menuItem) {
-                        navigationItemSelected(menuItem);
-                        return true;
-                    }
+                menuItem -> {
+                    navigationItemSelected(menuItem);
+                    return true;
                 });
         drawerToggle = new ActionBarDrawerToggle(this, drawerLayout, toolbar, R.string.drawer_open, R.string.drawer_close);
         drawerLayout.addDrawerListener(drawerToggle);
@@ -215,16 +212,13 @@ public class MainActivity extends AppCompatActivity implements
     }
 
     private void displayPermissionDeniedExplanation() {
-        showSnackBar(R.string.permission_denied_explanation, R.string.settings, new View.OnClickListener() {
-            @Override
-            public void onClick(View view) {
-                Intent intent = new Intent();
-                intent.setAction(Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
-                Uri uri = Uri.fromParts("package", BuildConfig.APPLICATION_ID, null);
-                intent.setData(uri);
-                intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                startActivity(intent);
-            }
+        showSnackBar(R.string.permission_denied_explanation, R.string.settings, view -> {
+            Intent intent = new Intent();
+            intent.setAction(Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
+            Uri uri = Uri.fromParts("package", BuildConfig.APPLICATION_ID, null);
+            intent.setData(uri);
+            intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            startActivity(intent);
         });
     }
 
@@ -237,12 +231,9 @@ public class MainActivity extends AppCompatActivity implements
     }
 
     private Func1<Throwable, Void> loggingErrorHandler() {
-        return new Func1<Throwable, Void>() {
-            @Override
-            public Void call(Throwable t) {
-                Log.e(TAG, t.getMessage(), t);
-                return null;
-            }
+        return t -> {
+            Log.e(TAG, t.getMessage(), t);
+            return null;
         };
     }
 }

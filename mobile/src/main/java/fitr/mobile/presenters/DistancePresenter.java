@@ -67,13 +67,10 @@ public class DistancePresenter extends BasePresenter<DistanceView> {
         refreshSubscription = fhh.readData(buildDataReadRequest())
                 .observeOn(AndroidSchedulers.mainThread())
                 .subscribeOn(Schedulers.io())
-                .map(new Func1<DataReadResult, DistanceData>() {
-                    @Override
-                    public DistanceData call(DataReadResult dataReadResult) {
-                        List<Distance> data = extractData(dataReadResult);
-                        BarData barData = mapToBarData(data);
-                        return new DistanceData(data, barData);
-                    }
+                .map(dataReadResult -> {
+                    List<Distance> data = extractData(dataReadResult);
+                    BarData barData = mapToBarData(data);
+                    return new DistanceData(data, barData);
                 })
                 .subscribe(new Subscriber<DistanceData>() {
                     @Override
@@ -140,12 +137,9 @@ public class DistancePresenter extends BasePresenter<DistanceView> {
     }
 
     private Func1<Throwable, Void> loggingErrorHandler() {
-        return new Func1<Throwable, Void>() {
-            @Override
-            public Void call(Throwable t) {
-                Log.e(TAG, t.getMessage(), t);
-                return null;
-            }
+        return t -> {
+            Log.e(TAG, t.getMessage(), t);
+            return null;
         };
     }
 }

@@ -52,7 +52,7 @@ public class DistanceReportsFragment extends Fragment implements
         final View view = inflater.inflate(R.layout.fragment_report_distance, container, false);
         ButterKnife.bind(this, view);
 
-        swipeLayout.setOnRefreshListener(swipeRefreshListener());
+        swipeLayout.setOnRefreshListener(() -> distancePresenter.refreshData());
 
         // Configure chart
         barChart.animateX(3000);
@@ -68,15 +68,6 @@ public class DistanceReportsFragment extends Fragment implements
     public void onDestroyView() {
         distancePresenter.detachView();
         super.onDestroyView();
-    }
-
-    private SwipeRefreshLayout.OnRefreshListener swipeRefreshListener() {
-        return new SwipeRefreshLayout.OnRefreshListener() {
-            @Override
-            public void onRefresh() {
-                distancePresenter.refreshData();
-            }
-        };
     }
 
     public void setRefreshing(boolean isRefreshing) {

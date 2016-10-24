@@ -1,10 +1,8 @@
 package fitr.mobile.google;
 
-import android.support.annotation.NonNull;
 import android.util.Log;
 
 import com.google.android.gms.common.api.GoogleApiClient;
-import com.google.android.gms.common.api.ResultCallback;
 import com.google.android.gms.fitness.Fitness;
 import com.google.android.gms.fitness.request.DataReadRequest;
 import com.google.android.gms.fitness.result.DataReadResult;
@@ -28,18 +26,15 @@ public class FitnessHistoryHelperImpl implements FitnessHistoryHelper {
             public void call(final Subscriber<? super DataReadResult> subscriber) {
                 if (clientUnavailable(subscriber)) return;
 
-                Fitness.HistoryApi.readData(client, request).setResultCallback(new ResultCallback<DataReadResult>() {
-                    @Override
-                    public void onResult(@NonNull DataReadResult dataReadResult) {
-                        if (subscriber.isUnsubscribed()) return;
-                        if (dataReadResult.getStatus().isSuccess()) {
-                            Log.i(TAG, "Successfully read data!");
-                            subscriber.onNext(dataReadResult);
-                            subscriber.onCompleted();
-                        } else {
-                            Log.i(TAG, "There was a problem reading data.");
-                            subscriber.onError(new IllegalStateException("Problem reading data: " + dataReadResult.getStatus().toString()));
-                        }
+                Fitness.HistoryApi.readData(client, request).setResultCallback(dataReadResult -> {
+                    if (subscriber.isUnsubscribed()) return;
+                    if (dataReadResult.getStatus().isSuccess()) {
+                        Log.i(TAG, "Successfully read data!");
+                        subscriber.onNext(dataReadResult);
+                        subscriber.onCompleted();
+                    } else {
+                        Log.i(TAG, "There was a problem reading data.");
+                        subscriber.onError(new IllegalStateException("Problem reading data: " + dataReadResult.getStatus().toString()));
                     }
                 });
             }

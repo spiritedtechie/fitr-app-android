@@ -1,14 +1,10 @@
 package fitr.mobile.google;
 
-import android.support.annotation.NonNull;
 import android.util.Log;
 
 import com.google.android.gms.common.api.GoogleApiClient;
-import com.google.android.gms.common.api.ResultCallback;
-import com.google.android.gms.common.api.Status;
 import com.google.android.gms.fitness.Fitness;
 import com.google.android.gms.fitness.data.Session;
-import com.google.android.gms.fitness.result.SessionStopResult;
 
 import rx.Observable;
 import rx.Subscriber;
@@ -34,18 +30,15 @@ public class FitnessSessionHelperImpl implements FitnessSessionHelper {
                     return;
                 }
 
-                Fitness.SessionsApi.startSession(client, session).setResultCallback(new ResultCallback<Status>() {
-                    @Override
-                    public void onResult(@NonNull Status status) {
-                        if (subscriber.isUnsubscribed()) return;
-                        if (status.isSuccess()) {
-                            Log.i(TAG, "Successfully started session " + session.getIdentifier());
-                            subscriber.onNext(session);
-                            subscriber.onCompleted();
-                        } else {
-                            Log.i(TAG, "There was a problem starting session.");
-                            subscriber.onError(new IllegalStateException("Problem starting session: " + status.toString()));
-                        }
+                Fitness.SessionsApi.startSession(client, session).setResultCallback(status -> {
+                    if (subscriber.isUnsubscribed()) return;
+                    if (status.isSuccess()) {
+                        Log.i(TAG, "Successfully started session " + session.getIdentifier());
+                        subscriber.onNext(session);
+                        subscriber.onCompleted();
+                    } else {
+                        Log.i(TAG, "There was a problem starting session.");
+                        subscriber.onError(new IllegalStateException("Problem starting session: " + status.toString()));
                     }
                 });
             }
@@ -60,20 +53,17 @@ public class FitnessSessionHelperImpl implements FitnessSessionHelper {
             public void call(final Subscriber<? super Session> subscriber) {
                 if (clientUnavailable(subscriber)) return;
 
-                Fitness.SessionsApi.stopSession(client, sessionId).setResultCallback(new ResultCallback<SessionStopResult>() {
-                    @Override
-                    public void onResult(@NonNull SessionStopResult sessionStopResult) {
-                        if (subscriber.isUnsubscribed()) return;
-                        if (sessionStopResult.getStatus().isSuccess()) {
-                            for (Session s : sessionStopResult.getSessions()) {
-                                Log.i(TAG, "Successfully stopped session " + sessionId);
-                                subscriber.onNext(s);
-                            }
-                            subscriber.onCompleted();
-                        } else {
-                            Log.i(TAG, "There was a problem stopping session.");
-                            subscriber.onError(new IllegalStateException("Problem stopping session: " + sessionId));
+                Fitness.SessionsApi.stopSession(client, sessionId).setResultCallback(sessionStopResult -> {
+                    if (subscriber.isUnsubscribed()) return;
+                    if (sessionStopResult.getStatus().isSuccess()) {
+                        for (Session s : sessionStopResult.getSessions()) {
+                            Log.i(TAG, "Successfully stopped session " + sessionId);
+                            subscriber.onNext(s);
                         }
+                        subscriber.onCompleted();
+                    } else {
+                        Log.i(TAG, "There was a problem stopping session.");
+                        subscriber.onError(new IllegalStateException("Problem stopping session: " + sessionId));
                     }
                 });
             }
