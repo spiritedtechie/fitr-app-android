@@ -20,24 +20,20 @@ public class FitnessHistoryHelperImpl implements FitnessHistoryHelper {
 
     @Override
     public Observable<DataReadResult> readData(final DataReadRequest request) {
-        return Observable.create(new Observable.OnSubscribe<DataReadResult>() {
+        return Observable.create(subscriber -> {
+            if (clientUnavailable(subscriber)) return;
 
-            @Override
-            public void call(final Subscriber<? super DataReadResult> subscriber) {
-                if (clientUnavailable(subscriber)) return;
-
-                Fitness.HistoryApi.readData(client, request).setResultCallback(dataReadResult -> {
-                    if (subscriber.isUnsubscribed()) return;
-                    if (dataReadResult.getStatus().isSuccess()) {
-                        Log.i(TAG, "Successfully read data!");
-                        subscriber.onNext(dataReadResult);
-                        subscriber.onCompleted();
-                    } else {
-                        Log.i(TAG, "There was a problem reading data.");
-                        subscriber.onError(new IllegalStateException("Problem reading data: " + dataReadResult.getStatus().toString()));
-                    }
-                });
-            }
+            Fitness.HistoryApi.readData(client, request).setResultCallback(dataReadResult -> {
+                if (subscriber.isUnsubscribed()) return;
+                if (dataReadResult.getStatus().isSuccess()) {
+                    Log.i(TAG, "Successfully read data!");
+                    subscriber.onNext(dataReadResult);
+                    subscriber.onCompleted();
+                } else {
+                    Log.i(TAG, "There was a problem reading data.");
+                    subscriber.onError(new IllegalStateException("Problem reading data: " + dataReadResult.getStatus().toString()));
+                }
+            });
         });
     }
 

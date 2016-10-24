@@ -13,7 +13,6 @@ import javax.inject.Inject;
 import fitr.mobile.google.FitnessRecordingHelper;
 import fitr.mobile.google.FitnessSessionHelper;
 import fitr.mobile.views.ActivityRecordingView;
-import rx.Subscriber;
 import rx.Subscription;
 import rx.android.schedulers.AndroidSchedulers;
 import rx.functions.Func1;
@@ -97,21 +96,9 @@ public class ActivityRecordingPresenter extends BasePresenter<ActivityRecordingV
         startSessionSubscriber = fsh.startSession(this.session)
                 .observeOn(AndroidSchedulers.mainThread())
                 .subscribeOn(Schedulers.io())
-                .subscribe(new Subscriber<Session>() {
-                    @Override
-                    public void onCompleted() {
-                    }
-
-                    @Override
-                    public void onError(Throwable e) {
-                        loggingErrorHandler().call(e);
-                    }
-
-                    @Override
-                    public void onNext(Session session) {
-                        getView().sessionStarted(session);
-                    }
-                });
+                .subscribe(
+                        n -> getView().sessionStarted(session),
+                        e -> loggingErrorHandler().call(e));
     }
 
     public void stopSession() {
@@ -130,22 +117,12 @@ public class ActivityRecordingPresenter extends BasePresenter<ActivityRecordingV
                 .observeOn(AndroidSchedulers.mainThread())
                 .subscribeOn(Schedulers.io())
                 .firstOrDefault(null)
-                .subscribe(new Subscriber<Session>() {
-                    @Override
-                    public void onCompleted() {
-                        ActivityRecordingPresenter.this.session = null;
-                    }
-
-                    @Override
-                    public void onError(Throwable e) {
-                        loggingErrorHandler().call(e);
-                    }
-
-                    @Override
-                    public void onNext(Session session) {
-                        if (session != null) getView().sessionStopped(session);
-                    }
-                });
+                .subscribe(
+                        n -> {
+                            if (session != null) getView().sessionStopped(session);
+                        },
+                        e -> loggingErrorHandler().call(e),
+                        () -> ActivityRecordingPresenter.this.session = null);
     }
 
     private Session buildSession(String activityType) {

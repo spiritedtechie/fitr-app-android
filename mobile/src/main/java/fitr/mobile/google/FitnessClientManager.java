@@ -4,22 +4,18 @@ import android.app.Activity;
 import android.content.Context;
 import android.content.IntentSender;
 import android.os.Bundle;
-import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
 import android.util.Log;
 
-import com.google.android.gms.common.ConnectionResult;
 import com.google.android.gms.common.Scopes;
 import com.google.android.gms.common.api.GoogleApiClient;
 import com.google.android.gms.common.api.Scope;
 import com.google.android.gms.fitness.Fitness;
 
 import rx.Observable;
-import rx.Subscriber;
 
 import static com.google.android.gms.common.api.GoogleApiClient.Builder;
 import static com.google.android.gms.common.api.GoogleApiClient.ConnectionCallbacks;
-import static com.google.android.gms.common.api.GoogleApiClient.OnConnectionFailedListener;
 
 public class FitnessClientManager {
 
@@ -51,44 +47,41 @@ public class FitnessClientManager {
     public Observable connect(final Activity activity) {
         Log.i(TAG, "connect");
 
-        return Observable.create(new Observable.OnSubscribe<Void>() {
-            @Override
-            public void call(final Subscriber<? super Void> subscriber) {
-                if (client != null && !client.isConnected() && !client.isConnecting()) {
-                    if (subscriber.isUnsubscribed()) return;
+        return Observable.create(subscriber -> {
+            if (client != null && !client.isConnected() && !client.isConnecting()) {
+                if (subscriber.isUnsubscribed()) return;
 
-                    client.registerConnectionCallbacks(new ConnectionCallbacks() {
-                        @Override
-                        public void onConnected(@Nullable Bundle bundle) {
-                            Log.i(TAG, "Connected");
-                            subscriber.onNext(null);
+                client.registerConnectionCallbacks(new ConnectionCallbacks() {
+                    @Override
+                    public void onConnected(@Nullable Bundle bundle) {
+                        Log.i(TAG, "Connected");
+                        subscriber.onNext(null);
+                    }
+
+                    @Override
+                    public void onConnectionSuspended(int i) {
+                        if (i == CAUSE_NETWORK_LOST) {
+                            Log.i(TAG, "Connection lost. Cause: Network Lost.");
+                        } else if (i == CAUSE_SERVICE_DISCONNECTED) {
+                            Log.i(TAG, "Connection lost. Reason: Service Disconnected");
                         }
+                    }
+                });
 
-                        @Override
-                        public void onConnectionSuspended(int i) {
-                            if (i == CAUSE_NETWORK_LOST) {
-                                Log.i(TAG, "Connection lost. Cause: Network Lost.");
-                            } else if (i == CAUSE_SERVICE_DISCONNECTED) {
-                                Log.i(TAG, "Connection lost. Reason: Service Disconnected");
-                            }
-                        }
-                    });
+                client.registerConnectionFailedListener(result -> {
+                    Log.i(TAG, "Connection failed");
+                    subscriber.onError(new IllegalStateException("Connection failed"));
+                    try {
+                        result.startResolutionForResult(activity, REQUEST_OAUTH);
+                    } catch (IntentSender.SendIntentException e) {
+                    }
+                });
 
-                    client.registerConnectionFailedListener(result -> {
-                        Log.i(TAG, "Connection failed");
-                        subscriber.onError(new IllegalStateException("Connection failed"));
-                        try {
-                            result.startResolutionForResult(activity, REQUEST_OAUTH);
-                        } catch (IntentSender.SendIntentException e) {
-                        }
-                    });
-
-                    client.connect();
-                } else {
-                    // Already connected/connecting
-                    subscriber.onNext(null);
-                    subscriber.onCompleted();
-                }
+                client.connect();
+            } else {
+                // Already connected/connecting
+                subscriber.onNext(null);
+                subscriber.onCompleted();
             }
         });
     }

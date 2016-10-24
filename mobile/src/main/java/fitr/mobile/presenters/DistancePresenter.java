@@ -22,7 +22,6 @@ import fitr.mobile.google.FitnessHistoryHelper;
 import fitr.mobile.models.Distance;
 import fitr.mobile.models.DistanceData;
 import fitr.mobile.views.DistanceView;
-import rx.Subscriber;
 import rx.Subscription;
 import rx.android.schedulers.AndroidSchedulers;
 import rx.functions.Func1;
@@ -72,24 +71,18 @@ public class DistancePresenter extends BasePresenter<DistanceView> {
                     BarData barData = mapToBarData(data);
                     return new DistanceData(data, barData);
                 })
-                .subscribe(new Subscriber<DistanceData>() {
-                    @Override
-                    public void onCompleted() {
-                        getView().setRefreshing(false);
-                    }
+                .subscribe(
+                        n -> {
+                            getView().setDistanceChartData(n.getDistanceBarData());
+                            getView().setDistanceTableData(n.getDistances());
+                        },
+                        e -> {
+                            loggingErrorHandler().call(e);
+                            getView().setRefreshing(false);
+                        },
+                        () -> getView().setRefreshing(false)
+                );
 
-                    @Override
-                    public void onError(Throwable e) {
-                        loggingErrorHandler().call(e);
-                        getView().setRefreshing(false);
-                    }
-
-                    @Override
-                    public void onNext(DistanceData data) {
-                        getView().setDistanceChartData(data.getDistanceBarData());
-                        getView().setDistanceTableData(data.getDistances());
-                    }
-                });
     }
 
     private DataReadRequest buildDataReadRequest() {

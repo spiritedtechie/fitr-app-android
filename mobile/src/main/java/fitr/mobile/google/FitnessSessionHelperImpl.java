@@ -20,53 +20,47 @@ public class FitnessSessionHelperImpl implements FitnessSessionHelper {
     @Override
     public Observable<Session> startSession(final Session session) {
 
-        return Observable.create(new Observable.OnSubscribe<Session>() {
-            @Override
-            public void call(final Subscriber<? super Session> subscriber) {
-                if (clientUnavailable(subscriber)) return;
+        return Observable.create(subscriber -> {
+            if (clientUnavailable(subscriber)) return;
 
-                if (session == null) {
-                    subscriber.onError(new IllegalStateException("Session is not available"));
-                    return;
-                }
-
-                Fitness.SessionsApi.startSession(client, session).setResultCallback(status -> {
-                    if (subscriber.isUnsubscribed()) return;
-                    if (status.isSuccess()) {
-                        Log.i(TAG, "Successfully started session " + session.getIdentifier());
-                        subscriber.onNext(session);
-                        subscriber.onCompleted();
-                    } else {
-                        Log.i(TAG, "There was a problem starting session.");
-                        subscriber.onError(new IllegalStateException("Problem starting session: " + status.toString()));
-                    }
-                });
+            if (session == null) {
+                subscriber.onError(new IllegalStateException("Session is not available"));
+                return;
             }
+
+            Fitness.SessionsApi.startSession(client, session).setResultCallback(status -> {
+                if (subscriber.isUnsubscribed()) return;
+                if (status.isSuccess()) {
+                    Log.i(TAG, "Successfully started session " + session.getIdentifier());
+                    subscriber.onNext(session);
+                    subscriber.onCompleted();
+                } else {
+                    Log.i(TAG, "There was a problem starting session.");
+                    subscriber.onError(new IllegalStateException("Problem starting session: " + status.toString()));
+                }
+            });
         });
     }
 
     @Override
     public Observable<Session> stopSession(final String sessionId) {
 
-        return Observable.create(new Observable.OnSubscribe<Session>() {
-            @Override
-            public void call(final Subscriber<? super Session> subscriber) {
-                if (clientUnavailable(subscriber)) return;
+        return Observable.create(subscriber -> {
+            if (clientUnavailable(subscriber)) return;
 
-                Fitness.SessionsApi.stopSession(client, sessionId).setResultCallback(sessionStopResult -> {
-                    if (subscriber.isUnsubscribed()) return;
-                    if (sessionStopResult.getStatus().isSuccess()) {
-                        for (Session s : sessionStopResult.getSessions()) {
-                            Log.i(TAG, "Successfully stopped session " + sessionId);
-                            subscriber.onNext(s);
-                        }
-                        subscriber.onCompleted();
-                    } else {
-                        Log.i(TAG, "There was a problem stopping session.");
-                        subscriber.onError(new IllegalStateException("Problem stopping session: " + sessionId));
+            Fitness.SessionsApi.stopSession(client, sessionId).setResultCallback(result -> {
+                if (subscriber.isUnsubscribed()) return;
+                if (result.getStatus().isSuccess()) {
+                    for (Session s : result.getSessions()) {
+                        Log.i(TAG, "Successfully stopped session " + sessionId);
+                        subscriber.onNext(s);
                     }
-                });
-            }
+                    subscriber.onCompleted();
+                } else {
+                    Log.i(TAG, "There was a problem stopping session.");
+                    subscriber.onError(new IllegalStateException("Problem stopping session: " + sessionId));
+                }
+            });
         });
     }
 
