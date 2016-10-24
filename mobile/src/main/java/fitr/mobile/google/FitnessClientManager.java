@@ -9,7 +9,9 @@ import android.support.annotation.Nullable;
 import android.util.Log;
 
 import com.google.android.gms.common.ConnectionResult;
+import com.google.android.gms.common.Scopes;
 import com.google.android.gms.common.api.GoogleApiClient;
+import com.google.android.gms.common.api.Scope;
 import com.google.android.gms.fitness.Fitness;
 
 import rx.Observable;
@@ -40,6 +42,9 @@ public class FitnessClientManager {
                 .addApiIfAvailable(Fitness.RECORDING_API)
                 .addApiIfAvailable(Fitness.SESSIONS_API)
                 .addApiIfAvailable(Fitness.HISTORY_API)
+                .addScope(new Scope(Scopes.FITNESS_LOCATION_READ_WRITE))
+                .addScope(new Scope(Scopes.FITNESS_ACTIVITY_READ_WRITE))
+                .addScope(new Scope(Scopes.FITNESS_BODY_READ_WRITE))
                 .build();
     }
 

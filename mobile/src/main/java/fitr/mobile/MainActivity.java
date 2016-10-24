@@ -178,12 +178,7 @@ public class MainActivity extends AppCompatActivity implements
 
         if (shouldProvideRationale) {
             Log.i(TAG, "Displaying permission rationale to provide additional context.");
-            showSnackBar(R.string.permission_rationale, R.string.ok, new View.OnClickListener() {
-                @Override
-                public void onClick(View view) {
-                    requestPermissionForLocation();
-                }
-            });
+            showSnackBar(R.string.permission_rationale, R.string.ok, view -> requestPermissionForLocation());
         } else {
             Log.i(TAG, "Requesting permission");
             requestPermissionForLocation();
