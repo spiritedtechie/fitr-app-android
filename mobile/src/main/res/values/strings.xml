@@ -18,4 +18,11 @@
     <string name="activity_startbutton_label">Start</string>
     <string name="activity_stopbutton_label">Stop</string>
 
+    <string name="signin_button_label">Sign In</string>
+    <string name="register_button_label">Register</string>
+
+
+    <string name="form_username_label">Username</string>
+    <string name="form_password_label">Password</string>
+
 </resources>

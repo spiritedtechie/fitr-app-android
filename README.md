@@ -32,6 +32,14 @@ Layouts
 - SwipeRefreshLayout
 - MPCharts layouts
 
+To Do
+------
+Package names - what it does, not how it does it
+Use case classes
+Use of Singles vs Observables
+Clean/onion architecture
+
+
 Setup
 -----
 
@@ -55,3 +63,15 @@ Run
 ---
 
 Run directly from Android Studio to a device of emulator.
+
+Port Forwarding
+---------------
+
+The app depends on the following REST services:
+
+auth-service
+user-profile-service
+
+On the service host (e.g. your laptop), enable NAT port forwarding on Virtualbox e.g. port 8443, 9443
+
+Then connect the phone to the same network to access the services on the host.

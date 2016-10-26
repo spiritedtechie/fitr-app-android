@@ -7,13 +7,20 @@ import fitr.mobile.ActivityRecordingFragment;
 import fitr.mobile.DistanceReportsFragment;
 import fitr.mobile.FitnessApplication;
 import fitr.mobile.MainActivity;
+import fitr.mobile.RegisterActivity;
+import fitr.mobile.SignInActivity;
 
 @Singleton
 @Component(modules = {
-        AppModule.class, FitnessApiModule.class, DistanceModule.class, ActivityRecordingModule.class})
+        AppModule.class, AuthenticationModule.class,
+        FitnessApiModule.class, DistanceModule.class, ActivityRecordingModule.class})
 public interface FitnessComponent {
 
     void inject(FitnessApplication fitnessApplication);
+
+    void inject(RegisterActivity registerActivity);
+
+    void inject(SignInActivity signInActivity);
 
     void inject(MainActivity mainActivity);
 
