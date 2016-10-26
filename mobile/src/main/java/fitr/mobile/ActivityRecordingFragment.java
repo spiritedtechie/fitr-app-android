@@ -1,6 +1,7 @@
 package fitr.mobile;
 
 import android.os.Bundle;
+import android.support.annotation.Nullable;
 import android.support.v4.app.Fragment;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -13,9 +14,7 @@ import android.widget.Toast;
 import com.google.android.gms.fitness.FitnessActivities;
 import com.google.android.gms.fitness.data.Session;
 
-import java.text.SimpleDateFormat;
 import java.util.ArrayList;
-import java.util.Date;
 import java.util.List;
 
 import javax.inject.Inject;
@@ -25,14 +24,10 @@ import butterknife.ButterKnife;
 import fitr.mobile.presenters.ActivityRecordingPresenter;
 import fitr.mobile.views.ActivityRecordingView;
 
-import static java.util.concurrent.TimeUnit.MILLISECONDS;
-
 public class ActivityRecordingFragment extends Fragment implements
         ActivityRecordingView {
 
-    private static final String TAG = "ActivityRecording";
-
-    private static final String DATE_FORMAT_PATTERN_DEFAULT = "yyyy-MM-dd'T'HH:mm:ss";
+    private static final String TAG = ActivityRecordingFragment.class.getSimpleName();
 
     @Inject
     ActivityRecordingPresenter presenter;
@@ -47,16 +42,21 @@ public class ActivityRecordingFragment extends Fragment implements
     @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
 
-        ((Injector) getActivity()).inject(this);
-        presenter.attachView(this);
-
         View view = inflater.inflate(R.layout.fragment_fitness_activity, container, false);
         ButterKnife.bind(this, view);
+        ((Injector) getActivity()).inject(this);
 
         initialiseActivitySpinner();
 
+        return view;
+    }
+
+    @Override
+    public void onViewCreated(View view, @Nullable Bundle savedInstanceState) {
+        super.onViewCreated(view, savedInstanceState);
+        presenter.attachView(this);
+
         // Button listeners
-        btnStop.setEnabled(false);
         btnStart.setOnClickListener(v -> {
             presenter.subscribe();
             String selectedActivity = dropDownListActivityType.getSelectedItem().toString();
@@ -67,8 +67,6 @@ public class ActivityRecordingFragment extends Fragment implements
             presenter.stopSession();
             presenter.unsubscribe();
         });
-
-        return view;
     }
 
     @Override
@@ -92,34 +90,24 @@ public class ActivityRecordingFragment extends Fragment implements
     }
 
     @Override
-    public void sessionStarting(Session session) {
-        btnStart.setEnabled(false);
+    public void allowStartSession(boolean allow) {
+        btnStart.setEnabled(allow);
+    }
+
+    @Override
+    public void allowStopSession(boolean allow) {
+        btnStop.setEnabled(allow);
     }
 
     @Override
     public void sessionStarted(Session session) {
-        btnStop.setEnabled(true);
         Toast.makeText(getContext(), "Session started!", Toast.LENGTH_SHORT).show();
     }
 
     @Override
-    public void sessionStopping(Session session) {
-        btnStop.setEnabled(false);
-    }
-
-    @Override
     public void sessionStopped(Session session) {
-        btnStart.setEnabled(true);
-
-        String toastMsg = "Session stopped." +
-                "\nIt started at " + formatTime(session.getStartTime(MILLISECONDS)) +
-                "\nIt ended at " + formatTime(session.getEndTime(MILLISECONDS));
+        String toastMsg = "Session stopped.";
         Toast.makeText(getContext(), toastMsg, Toast.LENGTH_LONG).show();
-    }
-
-    private String formatTime(long timeMillis) {
-        SimpleDateFormat df = new SimpleDateFormat(DATE_FORMAT_PATTERN_DEFAULT);
-        return df.format(new Date(timeMillis));
     }
 
     interface Injector {

@@ -1,6 +1,7 @@
 package fitr.mobile;
 
 import android.os.Bundle;
+import android.support.annotation.Nullable;
 import android.support.v4.app.Fragment;
 import android.support.v4.widget.SwipeRefreshLayout;
 import android.view.LayoutInflater;
@@ -28,7 +29,7 @@ import fitr.mobile.views.DistanceView;
 public class DistanceReportsFragment extends Fragment implements
         DistanceView {
 
-    private static final String TAG = "DistanceReports";
+    private static final String TAG = DistanceReportsFragment.class.getSimpleName();
 
     private static final String DATE_FORMAT_PATTERN_DEFAULT = "yyyy-MM-dd'T'HH:mm:ss";
 
@@ -44,24 +45,23 @@ public class DistanceReportsFragment extends Fragment implements
 
     @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
-
-        ((Injector) getActivity()).inject(this);
-        distancePresenter.attachView(this);
-
         // Views
         final View view = inflater.inflate(R.layout.fragment_report_distance, container, false);
+
+        // Inject
         ButterKnife.bind(this, view);
-
-        swipeLayout.setOnRefreshListener(() -> distancePresenter.refreshData());
-
-        // Configure chart
-        barChart.animateX(3000);
-        barChart.animateY(3000);
-
-        // Refresh chart
-        distancePresenter.refreshData();
+        ((Injector) getActivity()).inject(this);
 
         return view;
+    }
+
+    @Override
+    public void onViewCreated(View view, @Nullable Bundle savedInstanceState) {
+        super.onViewCreated(view, savedInstanceState);
+
+        distancePresenter.attachView(this);
+
+        swipeLayout.setOnRefreshListener(() -> distancePresenter.refreshData());
     }
 
     @Override

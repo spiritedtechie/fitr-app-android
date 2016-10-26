@@ -1,5 +1,7 @@
 package fitr.mobile.config;
 
+import javax.inject.Singleton;
+
 import dagger.Module;
 import dagger.Provides;
 import fitr.mobile.google.FitnessHistoryHelper;
@@ -9,6 +11,7 @@ import fitr.mobile.presenters.DistancePresenter;
 public class DistanceModule {
 
     @Provides
+    @Singleton
     DistancePresenter providesDistancePresenter(FitnessHistoryHelper fhh) {
         return new DistancePresenter(fhh);
     }

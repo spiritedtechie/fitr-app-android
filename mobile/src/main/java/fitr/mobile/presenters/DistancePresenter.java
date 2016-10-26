@@ -22,7 +22,6 @@ import fitr.mobile.google.FitnessHistoryHelper;
 import fitr.mobile.models.Distance;
 import fitr.mobile.models.DistanceData;
 import fitr.mobile.views.DistanceView;
-import rx.Subscription;
 import rx.android.schedulers.AndroidSchedulers;
 import rx.functions.Func1;
 import rx.schedulers.Schedulers;
@@ -34,36 +33,31 @@ import static java.util.concurrent.TimeUnit.MILLISECONDS;
 
 public class DistancePresenter extends BasePresenter<DistanceView> {
 
-    private static final String TAG = "DistancePresenter";
+    private static final String TAG = DistancePresenter.class.getSimpleName();
 
     private FitnessHistoryHelper fhh;
 
-    // Subscriptions
-    private Subscription refreshSubscription;
+    private DistanceData cachedDistanceData;
 
     public DistancePresenter(FitnessHistoryHelper fhh) {
         this.fhh = fhh;
     }
 
     @Override
-    public void attachView(DistanceView view) {
-        super.attachView(view);
-    }
+    protected void onViewAttached() {
+        super.onViewAttached();
 
-    @Override
-    public void detachView() {
-        unsubscribe(refreshSubscription);
-        super.detachView();
+        if (cachedDistanceData != null) {
+            refreshViewDistanceData(cachedDistanceData);
+        } else {
+            refreshData();
+        }
     }
 
     public void refreshData() {
-        checkViewAttached();
+        onView(v -> v.setRefreshing(true));
 
-        if (getView() != null) {
-            getView().setRefreshing(true);
-        }
-
-        refreshSubscription = fhh.readData(buildDataReadRequest())
+        fhh.readData(buildDataReadRequest())
                 .observeOn(AndroidSchedulers.mainThread())
                 .subscribeOn(Schedulers.io())
                 .map(dataReadResult -> {
@@ -71,18 +65,18 @@ public class DistancePresenter extends BasePresenter<DistanceView> {
                     BarData barData = mapToBarData(data);
                     return new DistanceData(data, barData);
                 })
+                .map(data -> {
+                    cachedDistanceData = data;
+                    return data;
+                })
                 .subscribe(
-                        n -> {
-                            getView().setDistanceChartData(n.getDistanceBarData());
-                            getView().setDistanceTableData(n.getDistances());
-                        },
+                        n -> refreshViewDistanceData(n),
                         e -> {
                             loggingErrorHandler().call(e);
-                            getView().setRefreshing(false);
+                            onView(v -> v.setRefreshing(false));
                         },
-                        () -> getView().setRefreshing(false)
+                        () -> onView(v -> v.setRefreshing(false))
                 );
-
     }
 
     private DataReadRequest buildDataReadRequest() {
@@ -127,6 +121,13 @@ public class DistancePresenter extends BasePresenter<DistanceView> {
         }
         BarDataSet bds = new BarDataSet(barEntries, "Total distance (m)");
         return new BarData(xValues, bds);
+    }
+
+    private void refreshViewDistanceData(DistanceData data) {
+        onView(v -> {
+            v.setDistanceChartData(data.getDistanceBarData());
+            v.setDistanceTableData(data.getDistances());
+        });
     }
 
     private Func1<Throwable, Void> loggingErrorHandler() {

@@ -32,8 +32,6 @@ public class FitnessClientManager {
     }
 
     private void buildFitnessClient() {
-        Log.i(TAG, "buildFitnessClient");
-
         client = new Builder(this.context)
                 .addApiIfAvailable(Fitness.RECORDING_API)
                 .addApiIfAvailable(Fitness.SESSIONS_API)
@@ -44,11 +42,11 @@ public class FitnessClientManager {
                 .build();
     }
 
-    public Observable connect(final Activity activity) {
-        Log.i(TAG, "connect");
+    public Observable<Void> connect(final Activity activity) {
 
         return Observable.create(subscriber -> {
             if (client != null && !client.isConnected() && !client.isConnecting()) {
+
                 if (subscriber.isUnsubscribed()) return;
 
                 client.registerConnectionCallbacks(new ConnectionCallbacks() {
@@ -56,6 +54,7 @@ public class FitnessClientManager {
                     public void onConnected(@Nullable Bundle bundle) {
                         Log.i(TAG, "Connected");
                         subscriber.onNext(null);
+                        subscriber.onCompleted();
                     }
 
                     @Override
@@ -64,22 +63,28 @@ public class FitnessClientManager {
                             Log.i(TAG, "Connection lost. Cause: Network Lost.");
                         } else if (i == CAUSE_SERVICE_DISCONNECTED) {
                             Log.i(TAG, "Connection lost. Reason: Service Disconnected");
+                        } else {
+                            Log.i(TAG, "Connection lost. Reason: Unknown");
                         }
                     }
                 });
 
                 client.registerConnectionFailedListener(result -> {
                     Log.i(TAG, "Connection failed");
-                    subscriber.onError(new IllegalStateException("Connection failed"));
-                    try {
-                        result.startResolutionForResult(activity, REQUEST_OAUTH);
-                    } catch (IntentSender.SendIntentException e) {
+                    subscriber.onError(new IllegalStateException("Connection failed: "));
+                    if (activity != null) {
+                        try {
+                            result.startResolutionForResult(activity, REQUEST_OAUTH);
+                        } catch (IntentSender.SendIntentException e) {
+                        }
                     }
                 });
 
+                Log.i(TAG, "Connecting");
                 client.connect();
             } else {
                 // Already connected/connecting
+                Log.i(TAG, "Already connected/connecting");
                 subscriber.onNext(null);
                 subscriber.onCompleted();
             }
@@ -87,9 +92,8 @@ public class FitnessClientManager {
     }
 
     public void disconnect() {
-        Log.i(TAG, "disconnect");
-
         if (client != null) {
+            Log.i(TAG, "disconnect");
             client.disconnect();
         }
     }

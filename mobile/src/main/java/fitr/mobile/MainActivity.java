@@ -34,7 +34,7 @@ public class MainActivity extends AppCompatActivity implements
         ActivityRecordingFragment.Injector,
         DistanceReportsFragment.Injector {
 
-    public static final String TAG = "Main";
+    public static final String TAG = MainActivity.class.getSimpleName();
 
     private static final int REQUEST_OAUTH = 1;
 
@@ -67,9 +67,9 @@ public class MainActivity extends AppCompatActivity implements
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-        ButterKnife.bind(this);
 
         // Inject
+        ButterKnife.bind(this);
         ((FitnessApplication) getApplication()).getFitnessComponent().inject(this);
 
         // Set a Toolbar to replace the ActionBar.
@@ -93,7 +93,6 @@ public class MainActivity extends AppCompatActivity implements
 
     @Override
     protected void onDestroy() {
-        fcm.disconnect();
         super.onDestroy();
     }
 
@@ -155,14 +154,7 @@ public class MainActivity extends AppCompatActivity implements
     }
 
     private void initialiseClient() {
-        fcm.getClient();
-        connectClient();
-    }
-
-    private void connectClient() {
-        fcm.connect(this)
-                .onErrorReturn(loggingErrorHandler())
-                .subscribe();
+        fcm.connect(this).onErrorReturn(loggingErrorHandler()).subscribe();
     }
 
     /**

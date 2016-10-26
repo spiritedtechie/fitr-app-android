@@ -13,7 +13,6 @@ import javax.inject.Inject;
 import fitr.mobile.google.FitnessRecordingHelper;
 import fitr.mobile.google.FitnessSessionHelper;
 import fitr.mobile.views.ActivityRecordingView;
-import rx.Subscription;
 import rx.android.schedulers.AndroidSchedulers;
 import rx.functions.Func1;
 import rx.schedulers.Schedulers;
@@ -23,7 +22,7 @@ import static java.util.concurrent.TimeUnit.MILLISECONDS;
 
 public class ActivityRecordingPresenter extends BasePresenter<ActivityRecordingView> {
 
-    private static final String TAG = "RecordingPresenter";
+    private static final String TAG = ActivityRecordingPresenter.class.getSimpleName();
 
     private static final String DATE_FORMAT_PATTERN_DEFAULT = "yyyy-MM-dd'T'HH:mm:ss";
 
@@ -35,34 +34,23 @@ public class ActivityRecordingPresenter extends BasePresenter<ActivityRecordingV
 
     private Session session;
 
-    private Subscription subscribeSubscriber;
-    private Subscription unsubscribeSubcriber;
-    private Subscription stopSessionSubscriber;
-    private Subscription startSessionSubscriber;
-
     public ActivityRecordingPresenter(FitnessRecordingHelper frh, FitnessSessionHelper fsh) {
         this.frh = frh;
         this.fsh = fsh;
     }
 
     @Override
-    public void attachView(ActivityRecordingView view) {
-        super.attachView(view);
-    }
-
-    @Override
-    public void detachView() {
-        unsubscribe(subscribeSubscriber);
-        unsubscribe(unsubscribeSubcriber);
-        unsubscribe(stopSessionSubscriber);
-        unsubscribe(startSessionSubscriber);
-        super.detachView();
+    protected void onViewAttached() {
+        if (session != null && session.isOngoing()) {
+            onView(view -> {
+                view.allowStartSession(false);
+                view.allowStopSession(true);
+            });
+        }
     }
 
     public void subscribe() {
-        checkViewAttached();
-
-        subscribeSubscriber = frh.subscribeIfNotExistingSubscription(TYPE_DISTANCE_DELTA)
+        frh.subscribeIfNotExistingSubscription(TYPE_DISTANCE_DELTA)
                 .observeOn(AndroidSchedulers.mainThread())
                 .subscribeOn(Schedulers.io())
                 .onErrorReturn(loggingErrorHandler())
@@ -70,9 +58,7 @@ public class ActivityRecordingPresenter extends BasePresenter<ActivityRecordingV
     }
 
     public void unsubscribe() {
-        checkViewAttached();
-
-        unsubscribeSubcriber = frh.unsubscribe(TYPE_DISTANCE_DELTA)
+        frh.unsubscribe(TYPE_DISTANCE_DELTA)
                 .observeOn(AndroidSchedulers.mainThread())
                 .subscribeOn(Schedulers.io())
                 .onErrorReturn(loggingErrorHandler())
@@ -80,49 +66,46 @@ public class ActivityRecordingPresenter extends BasePresenter<ActivityRecordingV
     }
 
     public void startSession(String sessionType) {
-        checkViewAttached();
-
         if (session != null && session.isOngoing()) {
             Log.i(TAG, "Session already ongoing.");
             return;
         }
 
-        this.session = buildSession(sessionType);
+        Session session = buildSession(sessionType);
 
-        if (getView() != null) {
-            getView().sessionStarting(session);
-        }
+        onView(v -> v.allowStartSession(false));
 
-        startSessionSubscriber = fsh.startSession(this.session)
+        fsh.startSession(session)
                 .observeOn(AndroidSchedulers.mainThread())
                 .subscribeOn(Schedulers.io())
+                .map(sess -> this.session = sess)
                 .subscribe(
-                        n -> getView().sessionStarted(session),
+                        n -> onView(v -> {
+                            v.sessionStarted(n);
+                            v.allowStopSession(true);
+                        }),
                         e -> loggingErrorHandler().call(e));
     }
 
     public void stopSession() {
-        checkViewAttached();
-
         if (session == null || !session.isOngoing()) {
             Log.i(TAG, "Session is not available or already stopped.");
             return;
         }
 
-        if (getView() != null) {
-            getView().sessionStopping(session);
-        }
+        onView(v -> v.allowStopSession(false));
 
-        stopSessionSubscriber = fsh.stopSession(session.getIdentifier())
+        fsh.stopSession(session.getIdentifier())
                 .observeOn(AndroidSchedulers.mainThread())
                 .subscribeOn(Schedulers.io())
                 .firstOrDefault(null)
+                .map(sess -> this.session = null)
                 .subscribe(
-                        n -> {
-                            if (session != null) getView().sessionStopped(session);
-                        },
-                        e -> loggingErrorHandler().call(e),
-                        () -> ActivityRecordingPresenter.this.session = null);
+                        n -> onView(v -> {
+                            v.sessionStopped(n);
+                            v.allowStartSession(true);
+                        }),
+                        e -> loggingErrorHandler().call(e));
     }
 
     private Session buildSession(String activityType) {

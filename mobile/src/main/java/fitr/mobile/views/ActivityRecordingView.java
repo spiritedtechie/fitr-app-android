@@ -4,11 +4,11 @@ import com.google.android.gms.fitness.data.Session;
 
 public interface ActivityRecordingView extends View {
 
-    void sessionStarting(Session session);
+    void allowStartSession(boolean allow);
+
+    void allowStopSession(boolean allow);
 
     void sessionStarted(Session session);
-
-    void sessionStopping(Session session);
 
     void sessionStopped(Session session);
 

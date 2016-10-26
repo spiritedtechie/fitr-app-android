@@ -15,7 +15,7 @@
     <string name="drawer_item_distance">Distance</string>
 
     <string name="activity_intro_text">Select your activity and hit Start!</string>
-    <string name="activity_record_start">Start</string>
-    <string name="activity_record_stop">Stop</string>
+    <string name="activity_startbutton_label">Start</string>
+    <string name="activity_stopbutton_label">Stop</string>
 
 </resources>
