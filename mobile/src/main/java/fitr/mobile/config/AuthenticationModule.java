@@ -14,8 +14,8 @@ public class AuthenticationModule {
 
     @Provides
     @Singleton
-    AuthenticateApi providesAuthenticateApi() {
-        return ServiceGenerator.createService(AuthenticateApi.class);
+    AuthenticateApi providesAuthenticateApi(ServiceGenerator serviceGenerator) {
+        return serviceGenerator.createService(AuthenticateApi.class);
     }
 
     @Provides
