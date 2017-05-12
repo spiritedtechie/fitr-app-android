@@ -44,9 +44,9 @@ Setup
 4. Create new OAuth client ID credentials with Application type: Android
 
 5. Find your debug keystore fingerprint:
-
-    keytool -list -v -keystore ~/.android/debug.keystore -alias androiddebugkey -storepass android -keypass android
-
+```
+keytool -list -v -keystore ~/.android/debug.keystore -alias androiddebugkey -storepass android -keypass android
+```
 Obviously, you can you another keystore e.g. if you are creating an app release.
 
 6. Add the SHA1 to the OAuth client ID credentials
